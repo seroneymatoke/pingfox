@@ -1,0 +1,74 @@
+{{define "dashboard.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PingFox — Dashboard</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { background:#14161C; color:#F3F1EC; font-family:Inter, sans-serif; padding:40px; }
+    h1 { font-family:Fraunces, serif; }
+    table { width:100%; border-collapse: collapse; margin-top: 24px; }
+    td, th { text-align:left; padding:12px; border-bottom:1px solid #2A2D38; font-size:14px; }
+    button { background:#FF6B3D; color:#14161C; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>PingFox</h1>
+
+  <div style="display:flex; gap:12px; margin:20px 0; align-items:center;">
+    <input
+      type="search" name="q" value="{{.Query}}" placeholder="Search client name or email..."
+      hx-get="/dashboard" hx-trigger="keyup changed delay:300ms" hx-target="body" hx-push-url="true"
+      style="flex:1; padding:10px; border-radius:8px; border:1px solid #2A2D38; background:#1B1E27; color:#F3F1EC;">
+
+    <select name="status" hx-get="/dashboard" hx-trigger="change" hx-target="body" hx-push-url="true"
+      style="padding:10px; border-radius:8px; border:1px solid #2A2D38; background:#1B1E27; color:#F3F1EC;">
+      <option value="" {{if eq .Status ""}}selected{{end}}>All</option>
+      <option value="unpaid" {{if eq .Status "unpaid"}}selected{{end}}>Unpaid</option>
+      <option value="paid" {{if eq .Status "paid"}}selected{{end}}>Paid</option>
+    </select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th><a href="?sort=client&order={{if and (eq .Sort "client") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Client</a></th>
+        <th><a href="?sort=amount&order={{if and (eq .Sort "amount") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Amount</a></th>
+        <th>Status</th>
+        <th><a href="?sort=due&order={{if and (eq .Sort "due") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Due</a></th>
+        <th>Pings</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Invoices}}
+      <tr id="invoice-{{.ID}}">
+        <td>{{.ClientName}}</td>
+        <td>${{.AmountCents}}</td>
+        <td>{{.Status}}</td>
+        <td>{{.DueDate.Format "Jan 2, 2006"}}</td>
+        <td>{{.PingsSent}}</td>
+        <td>
+          <button hx-post="/invoices/{{.ID}}/ping" hx-target="#invoice-{{.ID}}" hx-swap="outerHTML">
+            Ping now
+          </button>
+          <script>
+            function pingInvoice(invoiceId) {
+              fetch(`/invoices/${invoiceId}/ping`, {method: 'POST'})
+                      .then(r => r.json())
+                      .then(d => alert('Ping sent!'))
+                      .catch(e => alert('Error: ' + e));
+            }
+          </script>
+        </td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6">No invoices match.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</body>
+</html>
+{{end}}

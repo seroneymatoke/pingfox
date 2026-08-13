@@ -1,0 +1,18 @@
+# Go
+/backend/pingfox
+/backend/*.exe
+/backend/*.test
+/backend/*.out
+
+# Env / secrets — never commit real keys
+.env
+.env.*
+*.pem
+
+# OS
+.DS_Store
+.idea
+.idea/*
+*.pem
+settings.env
+cookies.txt

@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PingFox — Stop chasing. Start pinging.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14161C;
+    --bg-raised: #1B1E27;
+    --text: #F3F1EC;
+    --text-dim: #9B9CA6;
+    --accent: #FF6B3D;
+    --accent-dim: #C4502A;
+    --success: #7FA65C;
+    --border: #2A2D38;
+    --display-font: "Fraunces", serif;
+    --body-font: "Inter", sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+
+  /* ---------- NAV ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(20, 22, 28, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 72px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display-font); font-weight: 600; font-size: 20px; }
+  .brand svg { width: 30px; height: 30px; }
+  .nav-links { display: flex; align-items: center; gap: 36px; }
+  .nav-links a { font-size: 15px; color: var(--text-dim); transition: color 0.2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a:focus-visible, button:focus-visible, .cta:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px;
+  }
+  .nav-cta {
+    background: var(--accent); color: #14161C; font-weight: 600; font-size: 14px;
+    padding: 10px 20px; border-radius: 8px; transition: transform 0.15s, background 0.15s;
+  }
+  .nav-cta:hover { background: #ff7d54; transform: translateY(-1px); }
+
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* ---------- HERO ---------- */
+  header.hero {
+    position: relative;
+    padding: 120px 0 100px;
+    overflow: hidden;
+    isolation: isolate;
+  }
+
+  .ripple-field {
+    position: absolute; inset: 0; z-index: -1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ripple {
+    position: absolute;
+    border: 1px solid var(--accent-dim);
+    border-radius: 50%;
+    opacity: 0;
+    animation: ripple-out 4.5s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+  }
+  .ripple:nth-child(1) { width: 120px; height: 120px; animation-delay: 0s; }
+  .ripple:nth-child(2) { width: 120px; height: 120px; animation-delay: 1.1s; }
+  .ripple:nth-child(3) { width: 120px; height: 120px; animation-delay: 2.2s; }
+  .ripple:nth-child(4) { width: 120px; height: 120px; animation-delay: 3.3s; }
+  @keyframes ripple-out {
+    0% { width: 100px; height: 100px; opacity: 0.55; }
+    100% { width: 820px; height: 820px; opacity: 0; }
+  }
+
+  .hero-inner { position: relative; text-align: center; }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+    background: rgba(255, 107, 61, 0.1);
+    border: 1px solid rgba(255, 107, 61, 0.25);
+    padding: 6px 14px; border-radius: 100px;
+    margin-bottom: 28px;
+  }
+  .eyebrow .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    animation: pulse-dot 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  h1 {
+    font-family: var(--display-font);
+    font-weight: 600;
+    font-size: clamp(42px, 6.5vw, 76px);
+    line-height: 1.04;
+    letter-spacing: -0.01em;
+    max-width: 900px;
+    margin: 0 auto 28px;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 19px;
+    color: var(--text-dim);
+    max-width: 560px;
+    margin: 0 auto 44px;
+  }
+
+  .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+
+  .cta-primary {
+    background: var(--accent); color: #14161C; font-weight: 600; font-size: 16px;
+    padding: 15px 30px; border-radius: 10px; border: none; cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 8px 30px -8px rgba(255, 107, 61, 0.5);
+  }
+  .cta-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 34px -8px rgba(255, 107, 61, 0.65); }
+
+  .cta-secondary {
+    background: transparent; color: var(--text); font-weight: 600; font-size: 16px;
+    padding: 15px 26px; border-radius: 10px; border: 1px solid var(--border);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .cta-secondary:hover { border-color: #454857; background: var(--bg-raised); }
+
+  .hero-note { font-size: 13px; color: var(--text-dim); }
+
+  /* ---------- MOCK PRODUCT PREVIEW ---------- */
+  .preview {
+    margin-top: 80px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    max-width: 860px;
+    margin-left: auto; margin-right: auto;
+    box-shadow: 0 40px 80px -30px rgba(0,0,0,0.6);
+  }
+  .preview-topbar { display: flex; gap: 6px; padding: 4px 8px 16px; }
+  .preview-topbar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+
+  .invoice-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 20px;
+    align-items: center;
+    padding: 16px 18px;
+    border-radius: 10px;
+    background: var(--bg);
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  .invoice-row:last-child { margin-bottom: 0; }
+  .invoice-client { font-weight: 600; font-size: 15px; }
+  .invoice-meta { font-size: 13px; color: var(--text-dim); }
+  .invoice-amount { font-family: var(--display-font); font-weight: 600; font-size: 17px; }
+  .status-pill { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 100px; white-space: nowrap; }
+  .status-overdue { background: rgba(255, 107, 61, 0.14); color: var(--accent); }
+  .status-critical { background: rgba(224, 63, 63, 0.16); color: #FF5C5C; }
+  .status-pending { background: rgba(155, 156, 166, 0.14); color: var(--text-dim); }
+  .status-paid { background: rgba(127, 166, 92, 0.14); color: var(--success); }
+
+  .invoice-actions { display: flex; gap: 8px; }
+
+  .reclaim-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; color: #FF5C5C; font-weight: 600; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(224, 63, 63, 0.4);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  }
+  .reclaim-btn:hover { background: rgba(224, 63, 63, 0.1); border-color: #FF5C5C; }
+
+  .ping-btn[disabled] { opacity: 0.6; cursor: default; }
+  .ping-btn[disabled]::before { animation: none; opacity: 0; }
+
+  .invoice-lastping { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+
+  /* ---------- TOAST ---------- */
+  .toast-stack {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 200; display: flex; flex-direction: column; gap: 10px; align-items: center;
+  }
+  .toast {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    color: var(--text); font-size: 14px; font-weight: 500;
+    padding: 12px 20px; border-radius: 10px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 12px 30px -10px rgba(0,0,0,0.6);
+    animation: toast-in 0.25s ease-out, toast-out 0.3s ease-in 2.4s forwards;
+  }
+  .toast .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .toast.critical .dot { background: #FF5C5C; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
+
+  /* ---------- RECLAIM PANEL ---------- */
+  .reclaim-overlay {
+    position: fixed; inset: 0; background: rgba(10, 11, 15, 0.7);
+    z-index: 150; display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .reclaim-overlay.open { display: flex; }
+  .reclaim-panel {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; max-width: 420px; width: 100%;
+    box-shadow: 0 40px 80px -20px rgba(0,0,0,0.7);
+    animation: panel-in 0.2s ease-out;
+  }
+  @keyframes panel-in { from { opacity: 0; transform: scale(0.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .reclaim-panel h3 { font-family: var(--display-font); font-weight: 600; font-size: 20px; margin-bottom: 6px; }
+  .reclaim-panel .sub { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; }
+  .reclaim-option {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px; border-radius: 10px; border: 1px solid var(--border);
+    margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    background: var(--bg);
+  }
+  .reclaim-option:hover { border-color: var(--accent); background: rgba(255,107,61,0.06); }
+  .reclaim-option .ro-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: rgba(255,107,61,0.12); display: flex; align-items: center; justify-content: center;
+  }
+  .reclaim-option h4 { font-size: 14.5px; font-weight: 600; margin-bottom: 2px; }
+  .reclaim-option p { font-size: 13px; color: var(--text-dim); }
+  .reclaim-close {
+    margin-top: 18px; width: 100%; text-align: center; padding: 11px;
+    border-radius: 9px; border: 1px solid var(--border); background: transparent;
+    color: var(--text-dim); font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .reclaim-close:hover { color: var(--text); border-color: #454857; }
+
+  /* ---------- EMAIL PREVIEW ---------- */
+  .email-panel { max-width: 480px; }
+  .email-chrome {
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    margin-bottom: 20px; background: var(--bg);
+  }
+  .email-meta-row {
+    display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-size: 13px; gap: 8px;
+  }
+  .email-meta-row:last-of-type { border-bottom: none; }
+  .email-meta-label { color: var(--text-dim); width: 50px; flex-shrink: 0; }
+  .email-meta-value { color: var(--text); font-weight: 500; }
+  .email-body {
+    padding: 22px 18px; font-size: 14.5px; line-height: 1.7; color: var(--text);
+    white-space: pre-line;
+  }
+  .email-body .email-btn {
+    display: inline-block; margin-top: 14px;
+    background: var(--accent); color: #14161C; font-weight: 600; font-size: 13.5px;
+    padding: 10px 18px; border-radius: 8px;
+  }
+  .email-actions { display: flex; gap: 10px; }
+  .email-send {
+    flex: 1; text-align: center; padding: 12px; border-radius: 9px;
+    background: var(--accent); color: #14161C; font-weight: 600; font-size: 14.5px;
+    border: none; cursor: pointer;
+  }
+  .email-back {
+    padding: 12px 18px; border-radius: 9px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-dim); font-weight: 600; font-size: 14.5px; cursor: pointer;
+  }
+
+  /* ---------- CLIENT-SIDE MOCK (payment plan acceptance) ---------- */
+  .client-panel { max-width: 440px; text-align: center; }
+  .client-panel .cp-label {
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 18px;
+  }
+  .client-panel h3 { text-align: left; }
+  .plan-installments { text-align: left; margin: 22px 0; }
+  .plan-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 0; border-top: 1px solid var(--border); font-size: 14px;
+  }
+  .plan-row:first-child { border-top: none; }
+  .plan-row .pr-date { color: var(--text-dim); }
+  .plan-row .pr-amount { font-family: var(--display-font); font-weight: 600; }
+  .plan-total {
+    display: flex; justify-content: space-between; padding-top: 14px;
+    margin-top: 4px; border-top: 1px solid var(--border); font-weight: 700; font-size: 15px;
+  }
+  .client-accept-btn {
+    width: 100%; margin-top: 24px; padding: 14px; border-radius: 10px;
+    background: var(--accent); color: #14161C; font-weight: 700; font-size: 15px;
+    border: none; cursor: pointer;
+  }
+  .client-note { font-size: 12px; color: var(--text-dim); margin-top: 12px; }
+
+  .ping-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent); color: #14161C; font-weight: 600; font-size: 13px;
+    padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+    position: relative;
+  }
+  .ping-btn::before {
+    content: ''; position: absolute; inset: 0; border-radius: 8px;
+    border: 2px solid var(--accent); opacity: 0;
+    animation: btn-ping 2.6s ease-out infinite;
+  }
+  @keyframes btn-ping {
+    0% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.5); }
+  }
+
+  @media (max-width: 640px) {
+    .invoice-row { grid-template-columns: 1fr; gap: 8px; text-align: left; }
+  }
+
+  /* ---------- SECTION SHARED ---------- */
+  section { padding: 110px 0; }
+  .section-eyebrow {
+    font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; margin-bottom: 14px;
+  }
+  .section-head { max-width: 620px; margin-bottom: 64px; }
+  .section-head h2 {
+    font-family: var(--display-font); font-weight: 600;
+    font-size: clamp(30px, 4vw, 42px); line-height: 1.15; letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+  .section-head p { color: var(--text-dim); font-size: 17px; }
+
+  /* ---------- PROBLEM / PAIN ---------- */
+  .pain-quote {
+    font-family: var(--display-font);
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(24px, 3vw, 32px);
+    line-height: 1.4;
+    color: var(--text-dim);
+    max-width: 780px;
+  }
+  .pain-quote strong { color: var(--text); font-style: normal; font-weight: 600; }
+
+  /* ---------- FEATURES ---------- */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .feature-card { background: var(--bg); padding: 36px 32px; }
+  .feature-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: rgba(255, 107, 61, 0.12);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 22px;
+  }
+  .feature-card h3 { font-family: var(--display-font); font-weight: 600; font-size: 19px; margin-bottom: 10px; }
+  .feature-card p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; }
+
+  @media (max-width: 900px) { .feature-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- SEQUENCE (legitimately ordered) ---------- */
+  .sequence { position: relative; padding-left: 8px; }
+  .seq-line {
+    position: absolute; left: 27px; top: 12px; bottom: 12px;
+    width: 1px; background: linear-gradient(var(--accent), var(--border));
+  }
+  .seq-step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; padding-bottom: 48px; position: relative; }
+  .seq-step:last-child { padding-bottom: 0; }
+  .seq-marker {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--bg-raised); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display-font); font-weight: 600; font-size: 18px; color: var(--accent);
+    z-index: 1;
+  }
+  .seq-day { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 6px; letter-spacing: 0.02em; }
+  .seq-step h4 { font-family: var(--display-font); font-weight: 600; font-size: 18px; margin-bottom: 6px; }
+  .seq-step p { color: var(--text-dim); font-size: 14.5px; max-width: 460px; }
+
+  /* ---------- PRICING ---------- */
+  .pricing-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  }
+  .price-card {
+    background: var(--bg-raised); border: 1px solid var(--border); border-radius: 16px;
+    padding: 34px 28px;
+    display: flex; flex-direction: column;
+  }
+  .price-card.featured {
+    border-color: var(--accent);
+    position: relative;
+    box-shadow: 0 20px 50px -20px rgba(255, 107, 61, 0.35);
+  }
+  .price-card.featured::before {
+    content: 'MOST PICKED';
+    position: absolute; top: -12px; left: 28px;
+    background: var(--accent); color: #14161C;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    padding: 4px 10px; border-radius: 100px;
+  }
+  .price-tier { font-size: 14px; color: var(--text-dim); font-weight: 600; margin-bottom: 12px; }
+  .price-value { font-family: var(--display-font); font-weight: 600; font-size: 40px; margin-bottom: 4px; }
+  .price-value span { font-size: 15px; color: var(--text-dim); font-weight: 400; font-family: var(--body-font); }
+  .price-desc { color: var(--text-dim); font-size: 14px; margin-bottom: 26px; }
+  .price-feats { list-style: none; margin-bottom: 30px; flex-grow: 1; }
+  .price-feats li { font-size: 14px; color: var(--text); padding: 8px 0; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; }
+  .price-feats li:first-child { border-top: none; }
+  .price-feats svg { flex-shrink: 0; margin-top: 3px; color: var(--success); }
+  .price-cta {
+    text-align: center; padding: 12px; border-radius: 9px;
+    font-weight: 600; font-size: 14.5px;
+    border: 1px solid var(--border); transition: all 0.15s;
+  }
+  .price-card.featured .price-cta { background: var(--accent); color: #14161C; border-color: var(--accent); }
+  .price-cta:hover { border-color: var(--accent); }
+
+  @media (max-width: 900px) { .pricing-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- FINAL CTA ---------- */
+  .final-cta {
+    text-align: center;
+    background: var(--bg-raised);
+    border-radius: 24px;
+    padding: 80px 40px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .final-cta h2 { font-family: var(--display-font); font-weight: 600; font-size: clamp(30px, 4vw, 44px); margin-bottom: 18px; }
+  .final-cta p { color: var(--text-dim); font-size: 17px; margin-bottom: 36px; }
+
+  footer { border-top: 1px solid var(--border); padding: 40px 0; }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+  footer .brand { font-size: 16px; }
+  footer .legal { color: var(--text-dim); font-size: 13px; }
+
+  ::selection { background: var(--accent); color: #14161C; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none">
+        <path d="M6 12L4 5L11 9L16 6L21 9L28 5L26 12C26 20 21.5 25 16 25C10.5 25 6 20 6 12Z" fill="#FF6B3D"/>
+        <circle cx="12.5" cy="14" r="1.4" fill="#14161C"/>
+        <circle cx="19.5" cy="14" r="1.4" fill="#14161C"/>
+        <path d="M13 18.5C14 19.5 18 19.5 19 18.5" stroke="#14161C" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      PingFox
+    </div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+    </div>
+    <a href="#pricing" class="nav-cta">Start pinging — free</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="ripple-field" aria-hidden="true">
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+    <div class="ripple"></div>
+  </div>
+  <div class="wrap hero-inner">
+    <div class="eyebrow"><span class="dot"></span> Now syncing with Stripe Invoicing</div>
+    <h1>Stop chasing invoices.<br>Let <em>PingFox</em> do the nudging.</h1>
+    <p class="hero-sub">Upload an invoice PDF or add one in seconds — PingFox reads it, sends it, and follows up automatically until it's paid.</p>
+    <div class="hero-actions">
+      <button class="cta-primary">Start pinging — it's free</button>
+      <a href="#how" class="cta-secondary">See how it works</a>
+    </div>
+    <p class="hero-note">No card required · first 3 invoices free, forever</p>
+
+    <div class="preview">
+      <div class="preview-topbar"><span></span><span></span><span></span></div>
+
+      <div class="invoice-row" data-invoice="1042">
+        <div>
+          <div class="invoice-client">Marigold Studio</div>
+          <div class="invoice-meta">Invoice #1042 · Due 12 days ago</div>
+          <div class="invoice-lastping" data-lastping>Last ping: 5 days ago</div>
+        </div>
+        <div class="invoice-amount">$2,400</div>
+        <span class="status-pill status-overdue">Overdue</span>
+        <button class="ping-btn" data-ping>Ping now</button>
+      </div>
+
+      <div class="invoice-row" data-invoice="1038">
+        <div>
+          <div class="invoice-client">Vantage Retail</div>
+          <div class="invoice-meta">Invoice #1038 · Due 34 days ago</div>
+          <div class="invoice-lastping" data-lastping>Last ping: 9 days ago · 3 pings sent</div>
+        </div>
+        <div class="invoice-amount">$7,820</div>
+        <span class="status-pill status-critical">30+ days overdue</span>
+        <div class="invoice-actions">
+          <button class="reclaim-btn" data-reclaim>Reclaim</button>
+          <button class="ping-btn" data-ping>Ping now</button>
+        </div>
+      </div>
+
+      <div class="invoice-row" data-invoice="1041">
+        <div>
+          <div class="invoice-client">Northlake Co.</div>
+          <div class="invoice-meta">Invoice #1041 · Due in 4 days</div>
+          <div class="invoice-lastping" data-lastping>No pings sent yet</div>
+        </div>
+        <div class="invoice-amount">$980</div>
+        <span class="status-pill status-pending">Pending</span>
+        <button class="ping-btn" data-ping>Ping now</button>
+      </div>
+
+      <div class="invoice-row" data-invoice="1039">
+        <div>
+          <div class="invoice-client">Aldercroft LLC</div>
+          <div class="invoice-meta">Invoice #1039 · Paid 2 days ago</div>
+          <div class="invoice-lastping" data-lastping>Closed after 2 pings</div>
+        </div>
+        <div class="invoice-amount">$5,150</div>
+        <span class="status-pill status-paid">Paid</span>
+        <button class="ping-btn" style="visibility:hidden">Ping now</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+<div class="reclaim-overlay" id="reclaimOverlay">
+  <div class="reclaim-panel">
+    <h3>Reclaim invoice #1038</h3>
+    <p class="sub">Vantage Retail · $7,820 · 34 days overdue. Standard pings haven't landed — choose how to escalate.</p>
+
+    <div class="reclaim-option" data-action="firmer">
+      <div class="ro-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8H14M14 8L9 3M14 8L9 13" stroke="#FF6B3D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <h4>Send a firmer note</h4>
+        <p>Direct language, due date restated, pay link included.</p>
+      </div>
+    </div>
+
+    <div class="reclaim-option" data-action="plan">
+      <div class="ro-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="#FF6B3D" stroke-width="1.6"/><path d="M2 6.5H14" stroke="#FF6B3D" stroke-width="1.6"/></svg>
+      </div>
+      <div>
+        <h4>Offer a payment plan</h4>
+        <p>Send a link to split $7,820 into installments.</p>
+      </div>
+    </div>
+
+    <div class="reclaim-option" data-action="loop">
+      <div class="ro-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.5" stroke="#FF6B3D" stroke-width="1.6"/><path d="M3 14C3 11 5.2 9.5 8 9.5C10.8 9.5 13 11 13 14" stroke="#FF6B3D" stroke-width="1.6"/></svg>
+      </div>
+      <div>
+        <h4>Loop in a teammate</h4>
+        <p>Notify a partner or your accountant to step in.</p>
+      </div>
+    </div>
+
+    <button class="reclaim-close" id="reclaimClose">Cancel</button>
+  </div>
+</div>
+
+<div class="reclaim-overlay" id="emailOverlay">
+  <div class="reclaim-panel email-panel">
+    <h3 id="emailTitle">Preview</h3>
+    <p class="sub" id="emailSubtitle">This is what Vantage Retail will receive.</p>
+    <div class="email-chrome">
+      <div class="email-meta-row"><span class="email-meta-label">From</span><span class="email-meta-value">billing@yourstudio.com via PingFox</span></div>
+      <div class="email-meta-row"><span class="email-meta-label">To</span><span class="email-meta-value">accounts@vantageretail.com</span></div>
+      <div class="email-meta-row"><span class="email-meta-label">Subject</span><span class="email-meta-value" id="emailSubject">—</span></div>
+      <div class="email-body" id="emailBody">—</div>
+    </div>
+    <div class="email-actions">
+      <button class="email-back" id="emailBack">Back</button>
+      <button class="email-send" id="emailSend">Send this email</button>
+    </div>
+  </div>
+</div>
+
+<div class="reclaim-overlay" id="clientOverlay">
+  <div class="reclaim-panel client-panel">
+    <div class="cp-label">What Vantage Retail sees →</div>
+    <h3>Split $7,820 into 3 payments</h3>
+    <p class="sub">Sent by your studio via PingFox. No account needed to accept.</p>
+    <div class="plan-installments">
+      <div class="plan-row"><span class="pr-date">Today, on accept</span><span class="pr-amount">$2,607</span></div>
+      <div class="plan-row"><span class="pr-date">In 30 days</span><span class="pr-amount">$2,607</span></div>
+      <div class="plan-row"><span class="pr-date">In 60 days</span><span class="pr-amount">$2,606</span></div>
+      <div class="plan-total"><span>Total</span><span>$7,820</span></div>
+    </div>
+    <button class="client-accept-btn" id="clientAccept">Accept plan &amp; pay first installment</button>
+    <p class="client-note">Charged to the card on file · Powered by Stripe</p>
+  </div>
+</div>
+
+<section id="pain">
+  <div class="wrap">
+    <p class="pain-quote">You didn't start freelancing to become a <strong>collections agency</strong>. But somewhere between the invoice and the deposit, that's exactly what happened.</p>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-eyebrow">What PingFox does</div>
+      <h2>The nudge, handled — automatically, on tone.</h2>
+      <p>PingFox watches your invoices and sends the follow-up you'd write yourself, on a schedule you'd actually keep.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2C6 2 3 5 3 9C3 13 6 16 10 16M10 2C14 2 17 5 17 9C17 13 14 16 10 16M10 2V16" stroke="#FF6B3D" stroke-width="1.6"/><circle cx="10" cy="9" r="7" stroke="#FF6B3D" stroke-width="1.6"/></svg>
+        </div>
+        <h3>Syncs with what you already use</h3>
+        <p>Connect Stripe or QuickBooks in one click, or add invoices by hand. PingFox watches status changes so you don't have to check.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2" fill="#FF6B3D"/><circle cx="10" cy="10" r="6" stroke="#FF6B3D" stroke-width="1.4" opacity="0.6"/><circle cx="10" cy="10" r="9" stroke="#FF6B3D" stroke-width="1.4" opacity="0.3"/></svg>
+        </div>
+        <h3>Pings that don't sound like a robot</h3>
+        <p>Friendly by default, firmer as an invoice ages. Every message is editable, and you approve the tone before it ever goes out.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="#FF6B3D" stroke-width="1.6"/><path d="M3 7L10 11L17 7" stroke="#FF6B3D" stroke-width="1.6"/></svg>
+        </div>
+        <h3>Knows when to stop</h3>
+        <p>Once a client pays, every scheduled ping cancels itself. No awkward reminder landing an hour after the wire clears.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10H16M16 10L11 5M16 10L11 15" stroke="#FF6B3D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Escalation, without the awkwardness</h3>
+        <p>Set what happens after day 30 — a firmer note, a payment plan link, or looping in a teammate. You decide the ceiling.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3V17M3 10H17" stroke="#FF6B3D" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="10" r="8" stroke="#FF6B3D" stroke-width="1.4" opacity="0.4"/></svg>
+        </div>
+        <h3>See what's actually working</h3>
+        <p>Average days-to-pay, ping-to-payment rate, and which clients need a phone call instead of another email.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2L12.5 7.5L18 8.3L14 12L15 17.5L10 15L5 17.5L6 12L2 8.3L7.5 7.5L10 2Z" stroke="#FF6B3D" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </div>
+        <h3>Pays for itself</h3>
+        <p>Optional: only pay a small recovery fee on invoices PingFox actually got paid. No recovery, no fee.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-eyebrow">The ping sequence</div>
+      <h2>Four nudges, each tuned to the moment.</h2>
+      <p>This is the default sequence — every step is yours to edit, skip, or reorder.</p>
+    </div>
+    <div class="sequence">
+      <div class="seq-line" aria-hidden="true"></div>
+      <div class="seq-step">
+        <div class="seq-marker">1</div>
+        <div>
+          <div class="seq-day">3 days before due</div>
+          <h4>The heads-up</h4>
+          <p>A quiet reminder that an invoice is coming due — friendly, easy to miss on purpose.</p>
+        </div>
+      </div>
+      <div class="seq-step">
+        <div class="seq-marker">2</div>
+        <div>
+          <div class="seq-day">Day of, unpaid</div>
+          <h4>The nudge</h4>
+          <p>"Just checking this landed okay" — still warm, still assumes good faith.</p>
+        </div>
+      </div>
+      <div class="seq-step">
+        <div class="seq-marker">3</div>
+        <div>
+          <div class="seq-day">7 days overdue</div>
+          <h4>The follow-up</h4>
+          <p>Direct, still polite. Includes a one-click pay link and the original invoice again.</p>
+        </div>
+      </div>
+      <div class="seq-step">
+        <div class="seq-marker">4</div>
+        <div>
+          <div class="seq-day">30 days overdue</div>
+          <h4>The escalation</h4>
+          <p>Your call: a firmer message, a payment plan offer, or a ping to loop in a partner or accountant.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-eyebrow">Pricing</div>
+      <h2>Start free. Pay when it's paying you back.</h2>
+      <p>No contracts, no seat minimums. Cancel with one click.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-tier">Free</div>
+        <div class="price-value">$0<span>/month</span></div>
+        <div class="price-desc">For trying PingFox on a handful of invoices.</div>
+        <ul class="price-feats">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> First 3 invoices, free forever</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Upload a PDF or add manually</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Fixed ping schedule</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Email pings only</li>
+        </ul>
+        <a href="#" class="price-cta">Start free</a>
+      </div>
+      <div class="price-card featured">
+        <div class="price-tier">Starter</div>
+        <div class="price-value">$19<span>/month</span></div>
+        <div class="price-desc">For freelancers and solo consultants.</div>
+        <ul class="price-feats">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Up to 25 active invoices</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Custom ping sequence &amp; tone</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Email + SMS pings</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Stripe &amp; QuickBooks sync</li>
+        </ul>
+        <a href="#" class="price-cta">Start pinging</a>
+      </div>
+      <div class="price-card">
+        <div class="price-tier">Growth</div>
+        <div class="price-value">$49<span>/month</span></div>
+        <div class="price-desc">For small agencies with a few hands on billing.</div>
+        <ul class="price-feats">
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Unlimited invoices</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Team seats</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Escalation rules &amp; payment plans</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Recovery analytics</li>
+        </ul>
+        <a href="#" class="price-cta">Talk to us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="final-cta">
+      <h2>Your next invoice doesn't have to become<br>an awkward email.</h2>
+      <p>Set it up in under five minutes. First ping's on the house.</p>
+      <button class="cta-primary">Start pinging — it's free</button>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" width="22" height="22">
+        <path d="M6 12L4 5L11 9L16 6L21 9L28 5L26 12C26 20 21.5 25 16 25C10.5 25 6 20 6 12Z" fill="#FF6B3D"/>
+      </svg>
+      PingFox
+    </div>
+    <div class="legal">© 2026 PingFox. Gentle nudges, real results.</div>
+  </div>
+</footer>
+
+
+<script>
+  const toastStack = document.getElementById('toastStack');
+
+  function showToast(message, critical = false) {
+    const t = document.createElement('div');
+    t.className = 'toast' + (critical ? ' critical' : '');
+    t.innerHTML = `<span class="dot"></span>${message}`;
+    toastStack.appendChild(t);
+    setTimeout(() => t.remove(), 2800);
+  }
+
+  document.querySelectorAll('[data-ping]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const row = btn.closest('.invoice-row');
+      const client = row.querySelector('.invoice-client').textContent;
+      const lastPing = row.querySelector('[data-lastping]');
+
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Pinged ✓';
+      if (lastPing) lastPing.textContent = 'Last ping: just now';
+
+      showToast(`Ping sent to ${client}`);
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = original;
+      }, 2200);
+    });
+  });
+
+  const overlay = document.getElementById('reclaimOverlay');
+  const emailOverlay = document.getElementById('emailOverlay');
+  const clientOverlay = document.getElementById('clientOverlay');
+
+  document.querySelectorAll('[data-reclaim]').forEach(btn => {
+    btn.addEventListener('click', () => overlay.classList.add('open'));
+  });
+
+  document.getElementById('reclaimClose').addEventListener('click', () => {
+    overlay.classList.remove('open');
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+
+  const emailTemplates = {
+    firmer: {
+      title: 'Firmer note',
+      subject: 'Invoice #1038 — payment now 34 days overdue',
+      body: `Hi Vantage Retail team,
+
+Invoice #1038 for $7,820 was due on Jan 8 and is now 34 days overdue. This is the fourth reminder — I haven't been able to reach anyone on this yet.
+
+Could someone confirm a payment date this week? Happy to hop on a call if something's holding this up.
+
+Pay now: [Secure payment link]
+
+Thanks,
+Your studio`
+    },
+    plan: {
+      title: 'Payment plan offer',
+      subject: 'A simpler way to clear invoice #1038',
+      body: `Hi Vantage Retail team,
+
+I know $7,820 in one go isn't always easy to move quickly. I've set up a 3-part payment plan so this is easier to clear:
+
+  · $2,607 today
+  · $2,607 in 30 days
+  · $2,606 in 60 days
+
+No new paperwork — just accept below and the first payment goes through automatically.`,
+      cta: 'Review & accept plan'
+    },
+    loop: {
+      title: 'Loop in a teammate',
+      subject: 'Heads up: invoice #1038 needs a second touch',
+      body: `Hey,
+
+Invoice #1038 to Vantage Retail ($7,820) is 34 days overdue with 3 pings sent and no response. Flagging in case you have a contact there or want to take the next step.
+
+Invoice: #1038
+Client: Vantage Retail
+Amount: $7,820
+Pings sent: 3
+Last contact: 9 days ago
+
+— Sent automatically by PingFox`
+    }
+  };
+
+  let currentAction = null;
+
+  document.querySelectorAll('.reclaim-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      currentAction = opt.dataset.action;
+      const tpl = emailTemplates[currentAction];
+      document.getElementById('emailTitle').textContent = tpl.title;
+      document.getElementById('emailSubtitle').textContent =
+        currentAction === 'loop'
+          ? 'This goes to your teammate, not the client.'
+          : 'This is what Vantage Retail will receive.';
+      document.getElementById('emailSubject').textContent = tpl.subject;
+
+      let bodyHtml = tpl.body;
+      if (tpl.cta) bodyHtml += `\n\n<span class="email-btn">${tpl.cta}</span>`;
+      document.getElementById('emailBody').innerHTML = bodyHtml;
+
+      overlay.classList.remove('open');
+      emailOverlay.classList.add('open');
+    });
+  });
+
+  document.getElementById('emailBack').addEventListener('click', () => {
+    emailOverlay.classList.remove('open');
+    overlay.classList.add('open');
+  });
+
+  emailOverlay.addEventListener('click', (e) => {
+    if (e.target === emailOverlay) emailOverlay.classList.remove('open');
+  });
+
+  document.getElementById('emailSend').addEventListener('click', () => {
+    emailOverlay.classList.remove('open');
+
+    if (currentAction === 'plan') {
+      showToast('Payment plan email sent to Vantage Retail', true);
+      setTimeout(() => clientOverlay.classList.add('open'), 500);
+      return;
+    }
+
+    const labels = {
+      firmer: 'Firmer note sent to Vantage Retail',
+      loop: 'Teammate notified on invoice #1038'
+    };
+    showToast(labels[currentAction], true);
+  });
+
+  clientOverlay.addEventListener('click', (e) => {
+    if (e.target === clientOverlay) clientOverlay.classList.remove('open');
+  });
+
+  document.getElementById('clientAccept').addEventListener('click', () => {
+    clientOverlay.classList.remove('open');
+    showToast('Vantage Retail accepted the plan');
+
+    setTimeout(() => {
+      const row = document.querySelector('[data-invoice="1038"]');
+      const statusPill = row.querySelector('.status-pill');
+      const lastPing = row.querySelector('[data-lastping]');
+      const actions = row.querySelector('.invoice-actions');
+
+      showToast('Stripe webhook: $2,607 received from Vantage Retail');
+
+      statusPill.textContent = 'Plan active';
+      statusPill.className = 'status-pill status-pending';
+      lastPing.textContent = 'Installment 1 of 3 paid · next in 30 days';
+      actions.innerHTML = '<span style="font-size:13px; color: var(--text-dim);">Pings paused while plan is active</span>';
+    }, 1200);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      overlay.classList.remove('open');
+      emailOverlay.classList.remove('open');
+      clientOverlay.classList.remove('open');
+    }
+  });
+</script>
+</body>
+</html>
