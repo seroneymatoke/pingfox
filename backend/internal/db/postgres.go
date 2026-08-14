@@ -29,6 +29,7 @@ func NewPostgresStore(dsn string) (*PostgresStore, error) {
 		&models.Invoice{},
 		&models.PingEvent{},
 		&models.PaymentPlan{},
+		&models.Session{},
 	); err != nil {
 		return nil, fmt.Errorf("migration failed: %w", err)
 	}
@@ -184,14 +185,24 @@ func (s *PostgresStore) CreateSession(userID int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// TODO: store session in DB with expiry (for now, sessions never expire in the stub)
+	session := &models.Session{
+		Token:     token,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	if err := s.db.Create(session).Error; err != nil {
+		return "", err
+	}
 	return token, nil
 }
 
 func (s *PostgresStore) GetSessionUserID(token string) (int64, error) {
-	// TODO: verify token is valid and hasn't expired
-	// For now, this is a stub — real implementation queries a sessions table
-	return 0, fmt.Errorf("sessions table not yet implemented")
+	var session models.Session
+	if err := s.db.Where("token = ? AND expires_at > ?", token, time.Now()).First(&session).Error; err != nil {
+		return 0, fmt.Errorf("invalid or expired session")
+	}
+	return session.UserID, nil
 }
 
 func (s *PostgresStore) DeleteUser(userID int64) error {

@@ -23,13 +23,12 @@ func main() {
 	}
 
 	// @Todo - Add persistent to postgres
-	// store, err := db.NewPostgresStore(databaseURL)
-	//if err != nil {
-	//	log.Fatalf("Failed to connect to database: %v", err)
-	//}
-	//log.Println("✓ Connected to Postgres")
-	store := db.NewInMemoryStore()
-	log.Println("✓ Using in-memory store (dev mode)")
+	store, err := db.NewPostgresStore(databaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	log.Println("✓ Connected to Postgres")
+
 
 	// Email setup
 	var emailSender mailer.Sender = mailer.StubSender{} // default

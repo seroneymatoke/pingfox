@@ -112,3 +112,10 @@ const (
 )
 
 const FreeTierInvoiceLimit = 3
+
+type Session struct {
+	Token     string `gorm:"primaryKey"`
+	UserID    int64
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
