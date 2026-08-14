@@ -3,7 +3,7 @@
 // tests. Swap InMemoryStore for a Postgres-backed implementation
 // (see migrations/001_init.sql) when you're ready to deploy — nothing
 // outside this package needs to change, since api/ and scheduler/
-// only ever talk to the Store interface.
+
 package db
 
 import (
@@ -16,9 +16,12 @@ import (
 	"github.com/seroneymatoke/pingfox/backend/internal/models"
 )
 
-// Store is the persistence boundary. Every method the rest of the app
-// needs lives here. Keeping this interface small and explicit is what
-// makes swapping SQLite -> Postgres later a non-event.
+/**
+	Store is the persistence boundary. Every method the rest of the app
+ 	needs lives here. Keeping this interface small and explicit is what
+ 	makes swapping SQLite -> Postgres later a non-event.
+
+ **/
 type Store interface {
 	CreateInvoice(inv *models.Invoice) (*models.Invoice, error)
 	GetInvoice(id int64) (*models.Invoice, error)
