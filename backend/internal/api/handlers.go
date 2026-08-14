@@ -49,12 +49,32 @@ type Server struct {
 // landingHTML is the raw bytes of the marketing landing page (also
 // embedded, via frontend.LandingPageHTML), served as-is at GET / since
 // it's a fully self-contained static file with no server-side data.
-func NewServer(store db.Store, stripe stripeclient.Client, mailSender mailer.Sender, templatesFS embed.FS, templatesGlob string, landingHTML []byte) (*Server, error) {
-	tmpl, err := template.ParseFS(templatesFS, templatesGlob)
+func NewServer(
+	store db.Store,
+	stripe stripeclient.Client,
+	mailSender mailer.Sender,
+	templatesFS embed.FS,
+	templatesGlob string,
+	landingHTML []byte,
+) (*Server, error) {
+	tmpl, err := template.New("templates").Funcs(template.FuncMap{
+		// money converts stored integer cents into a conventional two-decimal
+		// display amount. Example: 200000 becomes "2000.00".
+		"money": func(cents int64) string {
+			return fmt.Sprintf("%.2f", float64(cents)/100)
+		},
+	}).ParseFS(templatesFS, templatesGlob)
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Store: store, Stripe: stripe, Tmpl: tmpl, Mailer: mailSender, LandingHTML: landingHTML}, nil
+
+	return &Server{
+		Store:       store,
+		Stripe:      stripe,
+		Tmpl:        tmpl,
+		Mailer:      mailSender,
+		LandingHTML: landingHTML,
+	}, nil
 }
 
 func (s *Server) handleLandingPage(w http.ResponseWriter, r *http.Request) {
@@ -388,10 +408,35 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // --- Create invoice (paywalled) ----------------------------------------
 
 type createInvoiceRequest struct {
-	ClientName  string `json:"client_name"`
-	ClientEmail string `json:"client_email"`
-	AmountCents int64  `json:"amount_cents"`
-	DueDate     string `json:"due_date"` // RFC3339 or YYYY-MM-DD
+	ClientName    string `json:"client_name"`
+	ClientEmail   string `json:"client_email"`
+	ClientAddress string `json:"client_address"`
+	ClientVATID   string `json:"vat_id"`
+
+	InvoiceNumber string `json:"invoice_number"`
+	Currency      string `json:"currency"`
+
+	IssueDate   string `json:"issue_date"`
+	DueDate     string `json:"due_date"`
+	ServiceDate string `json:"service_date"`
+
+	VATTreatment string  `json:"vat_treatment"` // none, inclusive, exclusive
+	VATRate      float64 `json:"vat_rate"`      // e.g. 19 means 19%
+
+	Notes string `json:"notes"`
+
+	LineItems []createInvoiceLineItem `json:"line_items"`
+
+	// Temporary compatibility field. The frontend currently sends this as
+	// Total Due in integer cents; the server should replace it with a total
+	// calculated from LineItems once line-item persistence is fully wired.
+	AmountCents int64 `json:"amount_cents"`
+}
+
+type createInvoiceLineItem struct {
+	Description string  `json:"description"`
+	Quantity    int64   `json:"quantity"`
+	UnitPrice   float64 `json:"unit_price"`
 }
 
 // handleCreateInvoice is the single entry point for both onboarding
@@ -438,12 +483,21 @@ func (s *Server) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "USD"
+	}
+
+	if len(currency) != 3 {
+		http.Error(w, `{"error":"currency must be a 3-letter ISO code"}`, http.StatusBadRequest)
+		return
+	}
 	inv, err := s.Store.CreateInvoice(&models.Invoice{
 		UserID:      user.ID,
 		ClientName:  req.ClientName,
 		ClientEmail: req.ClientEmail,
 		AmountCents: req.AmountCents,
-		Currency:    "usd",
+		Currency:    currency,
 		DueDate:     dueDate,
 		Status:      models.StatusPending,
 	})

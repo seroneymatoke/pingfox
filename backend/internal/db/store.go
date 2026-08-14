@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/seroneymatoke/pingfox/backend/internal/models"
+	"gorm.io/gorm"
 )
 
 /*
@@ -34,7 +35,10 @@ type Store interface {
 	UpdateInvoiceStatus(id int64, status models.InvoiceStatus) error
 	RecordPing(invoiceID int64, stage, channel string) error
 	DueForPing(now time.Time) ([]*models.Invoice, error)
-
+	CreateInvoiceWithLineItems(
+		invoice *models.Invoice,
+		lineItems []models.InvoiceLineItem,
+	) (*models.Invoice, error)
 	CreatePaymentPlan(plan *models.PaymentPlan) (*models.PaymentPlan, error)
 	GetPaymentPlan(id int64) (*models.PaymentPlan, error)
 	MarkInstallmentPaid(planID int64, sequenceNo int, stripeRef string, paidAt time.Time) error
@@ -101,6 +105,45 @@ func (s *InMemoryStore) CreateInvoice(inv *models.Invoice) (*models.Invoice, err
 	now := time.Now()
 	inv.CreatedAt, inv.UpdatedAt = now, now
 	s.invoices[inv.ID] = inv
+	return inv, nil
+}
+
+// CreateInvoiceWithLineItems saves an invoice and all of its line items in a
+// single transaction. If any item fails to save, the invoice is rolled back.
+func (s *PostgresStore) CreateInvoiceWithLineItems(
+	inv *models.Invoice,
+	lineItems []models.InvoiceLineItem,
+) (*models.Invoice, error) {
+	inv.ID = 0
+	inv.PublicID = uuid.New().String()
+
+	token, err := randomToken(32)
+	if err != nil {
+		return nil, fmt.Errorf("generate public invoice token: %w", err)
+	}
+	inv.PublicToken = token
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(inv).Error; err != nil {
+			return err
+		}
+
+		for index := range lineItems {
+			lineItems[index].ID = 0
+			lineItems[index].InvoiceID = inv.ID
+			lineItems[index].Position = index + 1
+
+			if err := tx.Create(&lineItems[index]).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create invoice with line items: %w", err)
+	}
+
 	return inv, nil
 }
 
