@@ -13,15 +13,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/seroneymatoke/pingfox/backend/internal/models"
 )
 
-/**
-	Store is the persistence boundary. Every method the rest of the app
- 	needs lives here. Keeping this interface small and explicit is what
- 	makes swapping SQLite -> Postgres later a non-event.
+/*
+*
 
- **/
+		Store is the persistence boundary. Every method the rest of the app
+	 	needs lives here. Keeping this interface small and explicit is what
+	 	makes swapping SQLite -> Postgres later a non-event.
+
+	 *
+*/
 type Store interface {
 	CreateInvoice(inv *models.Invoice) (*models.Invoice, error)
 	GetInvoice(id int64) (*models.Invoice, error)
@@ -89,6 +93,11 @@ func (s *InMemoryStore) CreateInvoice(inv *models.Invoice) (*models.Invoice, err
 	defer s.mu.Unlock()
 	s.nextInvID++
 	inv.ID = s.nextInvID
+
+	// Generate UUID and token for public access
+	inv.PublicID = uuid.New().String()
+	inv.PublicToken, _ = randomToken(32)
+
 	now := time.Now()
 	inv.CreatedAt, inv.UpdatedAt = now, now
 	s.invoices[inv.ID] = inv

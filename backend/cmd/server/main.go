@@ -16,19 +16,23 @@ import (
 )
 
 func main() {
+	autoCreate := false
+	for _, arg := range os.Args[1:] {
+		if arg == "autocreate=true" || arg == "autocreate=True" {
+			autoCreate = true
+		}
+	}
 	// Database setup
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL env var not set")
 	}
 
-	// @Todo - Add persistent to postgres
-	store, err := db.NewPostgresStore(databaseURL)
+	store, err := db.NewPostgresStore(databaseURL, autoCreate)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	log.Println("✓ Connected to Postgres")
-
 
 	// Email setup
 	var emailSender mailer.Sender = mailer.StubSender{} // default

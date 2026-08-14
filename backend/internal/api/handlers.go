@@ -75,6 +75,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /auth/{provider}/start", s.handleOAuthStart)
 	mux.HandleFunc("GET /auth/{provider}/callback", s.handleOAuthCallback)
 	mux.HandleFunc("POST /webhooks/stripe", s.handleStripeWebhook)
+	mux.HandleFunc("GET /invoices/{publicID}", s.handlePublicInvoice)
+	mux.HandleFunc("POST /invoices/{id}/mark-paid", s.handleMarkInvoicePaid)
 
 	// Protected — every handler here reads the user from context via
 	// auth.UserFromContext, never from a path/body parameter.
@@ -260,6 +262,36 @@ func randomState() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func (s *Server) handlePublicInvoice(w http.ResponseWriter, r *http.Request) {
+	//publicID := r.PathValue("publicID")
+	//token := r.URL.Query().Get("token")
+
+	// Find invoice by publicID
+	// Compare token to PublicToken
+	// If match, render public view with pay button
+	// If no match, return 404
+
+	// For now, stub it
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Public invoice view — coming soon"))
+}
+
+func (s *Server) handleMarkInvoicePaid(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	inv, _ := s.Store.GetInvoice(id)
+	if inv.UserID != user.ID {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	s.Store.UpdateInvoiceStatus(id, models.StatusPaid)
+	w.WriteHeader(http.StatusOK)
 }
 
 // --- GDPR erasure --------------------------------------------------------

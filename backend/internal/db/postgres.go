@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/seroneymatoke/pingfox/backend/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -14,25 +15,27 @@ import (
 // NewPostgresStore connects to Postgres via the DSN (Data Source Name).
 // The DSN is typically: "user=postgres password=xxx host=xxx port=5432 dbname=pingfox"
 // For Supabase, use your connection string from the dashboard.
-func NewPostgresStore(dsn string) (*PostgresStore, error) {
+func NewPostgresStore(dsn string, autoCreate bool) (*PostgresStore, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("postgres connection failed: %w", err)
 	}
+	if autoCreate {
+		// Auto-migrate schema on startup (in prod you'd use real migrations, but this is fine for v1)
+		if err := db.Migrator().DropTable(&models.User{}, &models.Invoice{}, &models.PingEvent{}, &models.PaymentPlan{}); err != nil {
+			log.Printf("warning: couldn't drop tables: %v", err)
+		}
+		if err := db.AutoMigrate(
+			&models.User{},
+			&models.Invoice{},
+			&models.PingEvent{},
+			&models.PaymentPlan{},
+			&models.Session{},
+		); err != nil {
+			return nil, fmt.Errorf("migration failed: %w", err)
+		}
+	}
 
-	// Auto-migrate schema on startup (in prod you'd use real migrations, but this is fine for v1)
-	if err := db.Migrator().DropTable(&models.User{}, &models.Invoice{}, &models.PingEvent{}, &models.PaymentPlan{}); err != nil {
-		log.Printf("warning: couldn't drop tables: %v", err)
-	}
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.Invoice{},
-		&models.PingEvent{},
-		&models.PaymentPlan{},
-		&models.Session{},
-	); err != nil {
-		return nil, fmt.Errorf("migration failed: %w", err)
-	}
 	return &PostgresStore{db: db}, nil
 }
 
@@ -42,6 +45,15 @@ type PostgresStore struct {
 
 // Invoice methods
 func (s *PostgresStore) CreateInvoice(inv *models.Invoice) (*models.Invoice, error) {
+	inv.ID = 0 // let DB auto-increment
+	inv.PublicID = uuid.New().String()
+
+	token, err := randomToken(32)
+	if err != nil {
+		return nil, err
+	}
+	inv.PublicToken = token
+
 	if err := s.db.Create(inv).Error; err != nil {
 		return nil, err
 	}

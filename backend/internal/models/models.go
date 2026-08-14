@@ -24,7 +24,7 @@ const (
 type Invoice struct {
 	ID          int64
 	UserID      int64
-	ExternalRef string // Stripe invoice ID or QuickBooks invoice ID
+	ExternalRef string
 	ClientName  string
 	ClientEmail string
 	AmountCents int64
@@ -33,7 +33,9 @@ type Invoice struct {
 	Status      InvoiceStatus
 	PingsSent   int
 	LastPingAt  *time.Time
-	PlanID      *int64 // set once a payment plan is accepted
+	PlanID      *int64
+	PublicID    string // Add this line
+	PublicToken string // Add this line
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

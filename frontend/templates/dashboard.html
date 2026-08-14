@@ -1,74 +1,594 @@
-{{define "dashboard.html"}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PingFox — Dashboard</title>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — PingFox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    body { background:#14161C; color:#F3F1EC; font-family:Inter, sans-serif; padding:40px; }
-    h1 { font-family:Fraunces, serif; }
-    table { width:100%; border-collapse: collapse; margin-top: 24px; }
-    td, th { text-align:left; padding:12px; border-bottom:1px solid #2A2D38; font-size:14px; }
-    button { background:#FF6B3D; color:#14161C; border:none; padding:8px 14px; border-radius:8px; font-weight:600; cursor:pointer; }
+    :root {
+      --orange: #ff6b3d;
+      --orange-dark: #e55a2b;
+      --panel: #111;
+      --panel-2: #171717;
+      --line: #2d2d2d;
+    }
+
+    .font-fraunces { font-family: 'Fraunces', serif; }
+    .font-inter { font-family: 'Inter', sans-serif; }
+    .text-orange { color: var(--orange); }
+    .bg-orange { background-color: var(--orange); }
+    .hover-orange:hover { background-color: var(--orange-dark); }
+
+    .theme-input, .theme-select, .theme-textarea {
+      width: 100%;
+      background: #0d0d0d;
+      border: 1px solid #363636;
+      border-radius: 10px;
+      color: #fff;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .theme-input, .theme-select { min-height: 48px; padding: 0 14px; }
+    .theme-textarea { min-height: 84px; padding: 12px 14px; resize: vertical; }
+    .theme-input::placeholder, .theme-textarea::placeholder { color: #767676; }
+    .theme-input:focus, .theme-select:focus, .theme-textarea:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(255, 107, 61, .13);
+    }
+
+    .preview-card {
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, .25);
+    }
+
+    .preview-topbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 38px;
+      padding: 0 18px;
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .preview-topbar span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #454545;
+    }
+
+    .preview-topbar span:first-child { background: var(--orange); }
+
+    .invoice-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 20px;
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--line);
+      transition: background .2s ease;
+    }
+
+    .invoice-row:last-child { border-bottom: 0; }
+    .invoice-row:hover { background: var(--panel-2); }
+    .invoice-client { color: #fff; font-family: 'Fraunces', serif; font-size: 1.2rem; line-height: 1.2; }
+    .invoice-meta { margin-top: 6px; color: #a3a3a3; font-size: .86rem; }
+    .invoice-lastping { margin-top: 5px; color: #6f6f6f; font-size: .76rem; }
+    .invoice-amount { color: var(--orange); font-family: 'Fraunces', serif; font-size: 1.42rem; white-space: nowrap; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 82px;
+      padding: 7px 10px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-pending { color: #c6c6c6; background: #282828; border-color: #414141; }
+    .status-overdue { color: #17100d; background: var(--orange); border-color: var(--orange); }
+    .status-critical { color: #ffb6b1; background: #351616; border-color: #7d2d27; }
+    .status-paid { color: #a6edbd; background: #13321e; border-color: #28663b; }
+
+    .invoice-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+    .action-btn {
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid #454545;
+      background: transparent;
+      color: #dedede;
+      font-size: .78rem;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: .2s ease;
+    }
+    .action-btn:hover { border-color: #777; background: #222; }
+    .ping-btn { border-color: var(--orange); background: var(--orange); color: #130a07; }
+    .ping-btn:hover { border-color: var(--orange-dark); background: var(--orange-dark); }
+    .reclaim-btn { color: #ffaaa4; border-color: #8d3933; }
+    .reclaim-btn:hover { background: #301714; border-color: #b24b42; }
+    .paid-btn { visibility: hidden; }
+
+    .modal-shell {
+      width: min(1120px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: hidden;
+      background: #101010;
+      border: 1px solid #363636;
+      border-radius: 18px;
+      box-shadow: 0 28px 90px rgba(0, 0, 0, .65);
+    }
+
+    .form-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 7px; }
+    .field-label { color: #bebebe; font-size: .74rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .line-item { display: grid; grid-template-columns: minmax(0, 1fr) 110px 155px 42px; gap: 12px; align-items: end; padding: 12px; background: #151515; border: 1px solid #303030; border-radius: 12px; }
+    .remove-btn { height: 48px; border: 1px solid #71312c; border-radius: 10px; color: #f3a39d; background: #2b1513; font-size: 1rem; }
+    .remove-btn:hover { background: #401b18; }
+
+    .currency-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 11px 14px;
+      color: #e4e4e7;
+      background: transparent;
+      border: 0;
+      border-bottom: 1px solid #262626;
+      text-align: left;
+      font-size: .86rem;
+      cursor: pointer;
+    }
+    .currency-option:hover, .currency-option.is-active { background: #242424; color: var(--orange); }
+    .currency-option-code { margin-left: 12px; color: #a1a1aa; font-size: .75rem; font-weight: 700; letter-spacing: .06em; }
+
+    @media (max-width: 800px) {
+      .invoice-row { grid-template-columns: 1fr auto; gap: 14px; }
+      .invoice-row > .status-pill { grid-column: 1 / 2; justify-self: start; }
+      .invoice-actions { grid-column: 2 / 3; grid-row: 2; }
+      .line-item { grid-template-columns: 1fr 1fr 42px; }
+      .line-item .description-field { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 620px) {
+      .invoice-row { display: flex; flex-wrap: wrap; }
+      .invoice-row > div:first-child { width: 100%; }
+      .invoice-actions { margin-left: auto; }
+      .filter-bar { flex-direction: column; }
+      .modal-shell { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+      .modal-content { max-height: calc(100vh - 16px); overflow-y: auto; }
+      .line-item { grid-template-columns: 1fr 42px; }
+      .line-item .quantity-field, .line-item .price-field { grid-column: span 1; }
+    }
   </style>
 </head>
-<body>
-  <h1>PingFox</h1>
-
-  <div style="display:flex; gap:12px; margin:20px 0; align-items:center;">
-    <input
-      type="search" name="q" value="{{.Query}}" placeholder="Search client name or email..."
-      hx-get="/dashboard" hx-trigger="keyup changed delay:300ms" hx-target="body" hx-push-url="true"
-      style="flex:1; padding:10px; border-radius:8px; border:1px solid #2A2D38; background:#1B1E27; color:#F3F1EC;">
-
-    <select name="status" hx-get="/dashboard" hx-trigger="change" hx-target="body" hx-push-url="true"
-      style="padding:10px; border-radius:8px; border:1px solid #2A2D38; background:#1B1E27; color:#F3F1EC;">
-      <option value="" {{if eq .Status ""}}selected{{end}}>All</option>
-      <option value="unpaid" {{if eq .Status "unpaid"}}selected{{end}}>Unpaid</option>
-      <option value="paid" {{if eq .Status "paid"}}selected{{end}}>Paid</option>
-    </select>
+<body class="bg-black text-white font-inter min-h-screen">
+<header class="border-b border-zinc-800 py-5 px-5 sm:px-8">
+  <div class="flex justify-between items-center max-w-7xl mx-auto gap-4">
+    <h1 class="text-3xl font-fraunces text-orange whitespace-nowrap">🦊 PingFox</h1>
+    <div class="flex gap-2 sm:gap-4 items-center">
+      <button onclick="openAddInvoiceModal()" class="bg-orange text-black font-bold py-2.5 px-4 sm:px-6 rounded-lg hover-orange transition">+ Add Invoice</button>
+      <a href="/logout" class="text-zinc-400 hover:text-white py-2 px-2 sm:px-4">Logout</a>
+    </div>
   </div>
+</header>
 
-  <table>
-    <thead>
-      <tr>
-        <th><a href="?sort=client&order={{if and (eq .Sort "client") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Client</a></th>
-        <th><a href="?sort=amount&order={{if and (eq .Sort "amount") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Amount</a></th>
-        <th>Status</th>
-        <th><a href="?sort=due&order={{if and (eq .Sort "due") (eq .Order "asc")}}desc{{else}}asc{{end}}&status={{.Status}}&q={{.Query}}" style="color:inherit;">Due</a></th>
-        <th>Pings</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Invoices}}
-      <tr id="invoice-{{.ID}}">
-        <td>{{.ClientName}}</td>
-        <td>${{.AmountCents}}</td>
-        <td>{{.Status}}</td>
-        <td>{{.DueDate.Format "Jan 2, 2006"}}</td>
-        <td>{{.PingsSent}}</td>
-        <td>
-          <button hx-post="/invoices/{{.ID}}/ping" hx-target="#invoice-{{.ID}}" hx-swap="outerHTML">
-            Ping now
-          </button>
-          <script>
-            function pingInvoice(invoiceId) {
-              fetch(`/invoices/${invoiceId}/ping`, {method: 'POST'})
-                      .then(r => r.json())
-                      .then(d => alert('Ping sent!'))
-                      .catch(e => alert('Error: ' + e));
-            }
-          </script>
-        </td>
-      </tr>
+<main class="p-5 sm:p-8 max-w-7xl mx-auto">
+  <section class="preview-card mb-6">
+    <div class="preview-topbar"><span></span><span></span><span></span></div>
+    <div class="filter-bar flex flex-col sm:flex-row gap-3 p-4 sm:p-5">
+      <div class="relative flex-1">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+        <input type="text" placeholder="Search client or invoice..." class="theme-input pl-11" id="searchInput" onkeyup="filterInvoices()">
+      </div>
+      <select class="theme-select sm:w-56" id="statusFilter" onchange="filterInvoices()">
+        <option value="">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="overdue">Overdue</option>
+        <option value="critical">Critical (30+)</option>
+        <option value="paid">Paid</option>
+      </select>
+    </div>
+  </section>
+
+  <section id="invoiceList" class="preview-card">
+    <div class="preview-topbar"><span></span><span></span><span></span></div>
+    {{range .Invoices}}
+    <article class="invoice-row" data-status="{{.Status}}" data-client="{{.ClientName}}" data-invoice="{{.ID}}">
+      <div>
+        <div class="invoice-client">{{.ClientName}}</div>
+        <div class="invoice-meta">Invoice #{{.ID}} · Due {{.DueDate.Format "Jan 2, 2006"}}</div>
+        {{if .LastPingAt}}
+        <div class="invoice-lastping">Last ping: {{.LastPingAt.Format "Jan 2"}} · {{.PingsSent}} pings sent</div>
+        {{else}}
+        <div class="invoice-lastping">No pings sent yet</div>
+        {{end}}
+      </div>
+      <div class="invoice-amount">
+        {{if eq .Currency "USD"}}${{else if eq .Currency "EUR"}}€{{else if eq .Currency "GBP"}}£{{else if eq .Currency "JPY"}}¥{{else if eq .Currency "INR"}}₹{{else if eq .Currency "KRW"}}₩{{else if eq .Currency "CNY"}}¥{{else if eq .Currency "TRY"}}₺{{end}}{{printf "%.2f" (div .AmountCents 100.0)}}
+        <span class="text-xs font-inter text-zinc-500 tracking-wider">{{.Currency}}</span>
+      </div>
+      {{if eq .Status "paid"}}
+      <span class="status-pill status-paid">Paid</span>
+      {{else if eq .Status "critical"}}
+      <span class="status-pill status-critical">30+ days overdue</span>
+      {{else if eq .Status "overdue"}}
+      <span class="status-pill status-overdue">Overdue</span>
       {{else}}
-      <tr><td colspan="6">No invoices match.</td></tr>
+      <span class="status-pill status-pending">Pending</span>
       {{end}}
-    </tbody>
-  </table>
+      <div class="invoice-actions">
+        {{if eq .Status "paid"}}
+        <button class="action-btn paid-btn" aria-hidden="true">Ping now</button>
+        {{else if eq .Status "critical"}}
+        <button onclick="reclaimInvoice({{.ID}})" class="action-btn reclaim-btn">Reclaim</button>
+        <button onclick="pingInvoice({{.ID}})" class="action-btn ping-btn">Ping now</button>
+        <button onclick="openEditModal({{.ID}})" class="action-btn">Edit</button>
+        <button onclick="markPaid({{.ID}})" class="action-btn">Mark paid</button>
+        {{else}}
+        <button onclick="pingInvoice({{.ID}})" class="action-btn ping-btn">Ping now</button>
+        <button onclick="openEditModal({{.ID}})" class="action-btn">Edit</button>
+        <button onclick="markPaid({{.ID}})" class="action-btn">Mark paid</button>
+        {{end}}
+      </div>
+    </article>
+    {{end}}
+    {{if not .Invoices}}
+    <div class="p-12 text-center">
+      <p class="text-zinc-400 mb-4">No invoices yet</p>
+      <button onclick="openAddInvoiceModal()" class="bg-orange text-black font-bold py-2.5 px-6 rounded-lg hover-orange transition">Add your first invoice</button>
+    </div>
+    {{end}}
+  </section>
+</main>
+
+<div id="addInvoiceModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="addInvoiceTitle">
+  <div class="modal-shell modal-content">
+    <div class="preview-topbar"><span></span><span></span><span></span></div>
+    <div class="flex justify-between items-center px-5 sm:px-7 py-4 border-b border-zinc-800">
+      <div>
+        <p class="text-xs tracking-[.18em] uppercase text-zinc-500">New receivable</p>
+        <h2 id="addInvoiceTitle" class="text-2xl font-fraunces text-orange mt-1">Add invoice</h2>
+      </div>
+      <button type="button" onclick="closeAddInvoiceModal()" class="w-9 h-9 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800" aria-label="Close">×</button>
+    </div>
+
+    <form id="addInvoiceForm" class="p-5 sm:p-7 space-y-5">
+      <div class="form-grid">
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Client name</span>
+          <input type="text" name="client_name" placeholder="Marigold Studio" required class="theme-input">
+        </label>
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Client email</span>
+          <input type="email" name="client_email" placeholder="billing@client.com" required class="theme-input">
+        </label>
+
+        <label class="field col-span-12 sm:col-span-4">
+          <span class="field-label">Currency</span>
+          <div class="relative">
+            <input type="text" id="currencySearch" class="theme-input pr-10" placeholder="Search currency or ISO code" autocomplete="off" aria-label="Search currency" aria-expanded="false" aria-controls="currencyOptions">
+            <input type="hidden" name="currency" id="currency" value="USD">
+            <button type="button" onclick="toggleCurrencyMenu()" class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white" aria-label="Open currency options">⌄</button>
+            <div id="currencyOptions" class="hidden absolute z-20 mt-2 w-full max-h-64 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl"></div>
+          </div>
+        </label>
+
+        <label class="field col-span-12 sm:col-span-4">
+          <span class="field-label">Due date</span>
+          <input type="date" name="due_date" required class="theme-input">
+        </label>
+
+        <div class="field col-span-12 sm:col-span-4">
+          <label for="taxInclusive" class="field-label">VAT / tax treatment</label>
+          <select name="tax_inclusive" id="taxInclusive" class="theme-select" onchange="toggleVatRate()">
+            <option value="false" selected>No VAT / tax</option>
+            <option value="true">VAT / tax included</option>
+            <option value="exclusive">VAT / tax added on top</option>
+          </select>
+        </div>
+
+        <label id="vatRateField" class="field col-span-12 sm:col-span-6 hidden">
+          <span class="field-label">VAT percentage</span>
+          <input type="number" step="0.01" min="0" max="100" name="tax_rate" id="taxRate" placeholder="e.g. 19" value="0" class="theme-input">
+        </label>
+
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">VAT ID (optional)</span>
+          <input type="text" name="vat_id" placeholder="DE123456789" class="theme-input">
+        </label>
+      </div>
+
+      <div class="border-t border-zinc-800 pt-5">
+        <div class="flex justify-between items-center mb-3 gap-4">
+          <div>
+            <h3 class="font-fraunces text-lg">Line items</h3>
+            <p class="text-xs text-zinc-500 mt-1">Enter amounts normally, e.g. 100 or 100.16.</p>
+          </div>
+          <button type="button" onclick="addLineItem()" class="text-orange hover:text-orange-300 text-sm font-semibold whitespace-nowrap">+ Add item</button>
+        </div>
+        <div id="lineItemsContainer" class="space-y-3"></div>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Notes (optional)</span>
+        <textarea name="notes" placeholder="Payment details or a note to the client" class="theme-textarea"></textarea>
+      </label>
+
+      <div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+        <button type="button" onclick="closeAddInvoiceModal()" class="sm:w-44 min-h-12 border border-zinc-700 text-zinc-200 rounded-lg hover:bg-zinc-800 transition">Cancel</button>
+        <button type="submit" class="flex-1 min-h-12 bg-orange text-black font-bold rounded-lg hover-orange transition">Create invoice</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const currencies = [
+    ['AED', 'د.إ', 'United Arab Emirates Dirham'], ['AFN', '؋', 'Afghan Afghani'], ['ALL', 'L', 'Albanian Lek'], ['AMD', '֏', 'Armenian Dram'],
+    ['ANG', 'ƒ', 'Netherlands Antillean Guilder'], ['AOA', 'Kz', 'Angolan Kwanza'], ['ARS', '$', 'Argentine Peso'], ['AUD', 'A$', 'Australian Dollar'],
+    ['AWG', 'ƒ', 'Aruban Florin'], ['AZN', '₼', 'Azerbaijani Manat'], ['BAM', 'KM', 'Bosnia-Herzegovina Convertible Mark'], ['BBD', 'Bds$', 'Barbadian Dollar'],
+    ['BDT', '৳', 'Bangladeshi Taka'], ['BGN', 'лв', 'Bulgarian Lev'], ['BHD', 'ب.د', 'Bahraini Dinar'], ['BIF', 'FBu', 'Burundian Franc'],
+    ['BMD', '$', 'Bermudan Dollar'], ['BND', 'B$', 'Brunei Dollar'], ['BOB', 'Bs.', 'Bolivian Boliviano'], ['BRL', 'R$', 'Brazilian Real'],
+    ['BSD', 'B$', 'Bahamian Dollar'], ['BTN', 'Nu.', 'Bhutanese Ngultrum'], ['BWP', 'P', 'Botswana Pula'], ['BYN', 'Br', 'Belarusian Ruble'],
+    ['BZD', 'BZ$', 'Belize Dollar'], ['CAD', 'C$', 'Canadian Dollar'], ['CDF', 'FC', 'Congolese Franc'], ['CHF', 'CHF', 'Swiss Franc'],
+    ['CLP', '$', 'Chilean Peso'], ['CNY', '¥', 'Chinese Yuan'], ['COP', '$', 'Colombian Peso'], ['CRC', '₡', 'Costa Rican Colón'],
+    ['CUP', '₱', 'Cuban Peso'], ['CVE', '$', 'Cape Verdean Escudo'], ['CZK', 'Kč', 'Czech Koruna'], ['DJF', 'Fdj', 'Djiboutian Franc'],
+    ['DKK', 'kr', 'Danish Krone'], ['DOP', 'RD$', 'Dominican Peso'], ['DZD', 'د.ج', 'Algerian Dinar'], ['EGP', 'E£', 'Egyptian Pound'],
+    ['ERN', 'Nfk', 'Eritrean Nakfa'], ['ETB', 'Br', 'Ethiopian Birr'], ['EUR', '€', 'Euro'], ['FJD', 'FJ$', 'Fijian Dollar'],
+    ['FKP', '£', 'Falkland Islands Pound'], ['FOK', 'kr', 'Faroese Króna'], ['GBP', '£', 'British Pound Sterling'], ['GEL', '₾', 'Georgian Lari'],
+    ['GGP', '£', 'Guernsey Pound'], ['GHS', '₵', 'Ghanaian Cedi'], ['GIP', '£', 'Gibraltar Pound'], ['GMD', 'D', 'Gambian Dalasi'],
+    ['GNF', 'FG', 'Guinean Franc'], ['GTQ', 'Q', 'Guatemalan Quetzal'], ['GYD', 'G$', 'Guyanese Dollar'], ['HKD', 'HK$', 'Hong Kong Dollar'],
+    ['HNL', 'L', 'Honduran Lempira'], ['HRK', 'kn', 'Croatian Kuna'], ['HTG', 'G', 'Haitian Gourde'], ['HUF', 'Ft', 'Hungarian Forint'],
+    ['IDR', 'Rp', 'Indonesian Rupiah'], ['ILS', '₪', 'Israeli New Shekel'], ['IMP', '£', 'Manx Pound'], ['INR', '₹', 'Indian Rupee'],
+    ['IQD', 'ع.د', 'Iraqi Dinar'], ['IRR', '﷼', 'Iranian Rial'], ['ISK', 'kr', 'Icelandic Króna'], ['JEP', '£', 'Jersey Pound'],
+    ['JMD', 'J$', 'Jamaican Dollar'], ['JOD', 'د.ا', 'Jordanian Dinar'], ['JPY', '¥', 'Japanese Yen'], ['KES', 'KSh', 'Kenyan Shilling'],
+    ['KGS', 'с', 'Kyrgyzstani Som'], ['KHR', '៛', 'Cambodian Riel'], ['KID', '$', 'Kiribati Dollar'], ['KMF', 'CF', 'Comorian Franc'],
+    ['KRW', '₩', 'South Korean Won'], ['KWD', 'د.ك', 'Kuwaiti Dinar'], ['KYD', '$', 'Cayman Islands Dollar'], ['KZT', '₸', 'Kazakhstani Tenge'],
+    ['LAK', '₭', 'Laotian Kip'], ['LBP', 'ل.ل', 'Lebanese Pound'], ['LKR', 'Rs', 'Sri Lankan Rupee'], ['LRD', 'L$', 'Liberian Dollar'],
+    ['LSL', 'L', 'Lesotho Loti'], ['LYD', 'ل.د', 'Libyan Dinar'], ['MAD', 'د.م.', 'Moroccan Dirham'], ['MDL', 'L', 'Moldovan Leu'],
+    ['MGA', 'Ar', 'Malagasy Ariary'], ['MKD', 'ден', 'Macedonian Denar'], ['MMK', 'K', 'Myanmar Kyat'], ['MNT', '₮', 'Mongolian Tögrög'],
+    ['MOP', 'P', 'Macanese Pataca'], ['MRU', 'UM', 'Mauritanian Ouguiya'], ['MUR', '₨', 'Mauritian Rupee'], ['MVR', 'Rf', 'Maldivian Rufiyaa'],
+    ['MWK', 'MK', 'Malawian Kwacha'], ['MXN', 'MX$', 'Mexican Peso'], ['MYR', 'RM', 'Malaysian Ringgit'], ['MZN', 'MT', 'Mozambican Metical'],
+    ['NAD', 'N$', 'Namibian Dollar'], ['NGN', '₦', 'Nigerian Naira'], ['NIO', 'C$', 'Nicaraguan Córdoba'], ['NOK', 'kr', 'Norwegian Krone'],
+    ['NPR', 'रू', 'Nepalese Rupee'], ['NZD', 'NZ$', 'New Zealand Dollar'], ['OMR', 'ر.ع.', 'Omani Rial'], ['PAB', 'B/.', 'Panamanian Balboa'],
+    ['PEN', 'S/', 'Peruvian Sol'], ['PGK', 'K', 'Papua New Guinean Kina'], ['PHP', '₱', 'Philippine Peso'], ['PKR', '₨', 'Pakistani Rupee'],
+    ['PLN', 'zł', 'Polish Złoty'], ['PYG', '₲', 'Paraguayan Guaraní'], ['QAR', 'ر.ق', 'Qatari Riyal'], ['RON', 'lei', 'Romanian Leu'],
+    ['RSD', 'дин.', 'Serbian Dinar'], ['RUB', '₽', 'Russian Ruble'], ['RWF', 'FRw', 'Rwandan Franc'], ['SAR', 'ر.س', 'Saudi Riyal'],
+    ['SBD', 'SI$', 'Solomon Islands Dollar'], ['SCR', '₨', 'Seychellois Rupee'], ['SDG', 'ج.س.', 'Sudanese Pound'], ['SEK', 'kr', 'Swedish Krona'],
+    ['SGD', 'S$', 'Singapore Dollar'], ['SHP', '£', 'Saint Helena Pound'], ['SLE', 'Le', 'Sierra Leonean Leone'], ['SLL', 'Le', 'Sierra Leonean Leone'],
+    ['SOS', 'Sh', 'Somali Shilling'], ['SRD', '$', 'Surinamese Dollar'], ['SSP', '£', 'South Sudanese Pound'], ['STN', 'Db', 'São Tomé and Príncipe Dobra'],
+    ['SYP', '£', 'Syrian Pound'], ['SZL', 'E', 'Swazi Lilangeni'], ['THB', '฿', 'Thai Baht'], ['TJS', 'ЅМ', 'Tajikistani Somoni'],
+    ['TMT', 'm', 'Turkmenistani Manat'], ['TND', 'د.ت', 'Tunisian Dinar'], ['TOP', 'T$', 'Tongan Paʻanga'], ['TRY', '₺', 'Turkish Lira'],
+    ['TTD', 'TT$', 'Trinidad and Tobago Dollar'], ['TVD', '$', 'Tuvaluan Dollar'], ['TWD', 'NT$', 'New Taiwan Dollar'], ['TZS', 'TSh', 'Tanzanian Shilling'],
+    ['UAH', '₴', 'Ukrainian Hryvnia'], ['UGX', 'USh', 'Ugandan Shilling'], ['USD', '$', 'United States Dollar'], ['UYU', '$U', 'Uruguayan Peso'],
+    ['UZS', "so'm", 'Uzbekistani Som'], ['VES', 'Bs.', 'Venezuelan Bolívar'], ['VND', '₫', 'Vietnamese Đồng'], ['VUV', 'Vt', 'Vanuatu Vatu'],
+    ['WST', 'WS$', 'Samoan Tālā'], ['XAF', 'FCFA', 'Central African CFA Franc'], ['XCD', 'EC$', 'East Caribbean Dollar'], ['XOF', 'CFA', 'West African CFA Franc'],
+    ['XPF', '₣', 'CFP Franc'], ['YER', '﷼', 'Yemeni Rial'], ['ZAR', 'R', 'South African Rand'], ['ZMW', 'ZK', 'Zambian Kwacha'], ['ZWL', 'Z$', 'Zimbabwean Dollar']
+  ];
+
+  const currencySearch = document.getElementById('currencySearch');
+  const currencyValue = document.getElementById('currency');
+  const currencyOptions = document.getElementById('currencyOptions');
+
+  function currencyLabel(currency) {
+    return `${currency[1]} ${currency[0]} — ${currency[2]}`;
+  }
+
+  function renderCurrencyOptions(query = '') {
+    const search = query.trim().toLowerCase();
+    const matches = currencies.filter(([code, symbol, name]) => `${code} ${symbol} ${name}`.toLowerCase().includes(search));
+    currencyOptions.innerHTML = matches.length ? matches.map(currency => `
+        <button type="button" class="currency-option ${currency[0] === currencyValue.value ? 'is-active' : ''}" data-code="${currency[0]}">
+          <span>${currencyLabel(currency)}</span><span class="currency-option-code">${currency[0]}</span>
+        </button>
+      `).join('') : '<p class="px-4 py-3 text-sm text-zinc-500">No currency found.</p>';
+
+    currencyOptions.querySelectorAll('.currency-option').forEach(button => {
+      button.addEventListener('click', () => selectCurrency(button.dataset.code));
+    });
+  }
+
+  function selectCurrency(code) {
+    const currency = currencies.find(item => item[0] === code);
+    if (!currency) return;
+    currencyValue.value = code;
+    currencySearch.value = currencyLabel(currency);
+    currencyOptions.classList.add('hidden');
+    currencySearch.setAttribute('aria-expanded', 'false');
+  }
+
+  function openCurrencyMenu() {
+    renderCurrencyOptions(currencySearch.value);
+    currencyOptions.classList.remove('hidden');
+    currencySearch.setAttribute('aria-expanded', 'true');
+  }
+
+  function toggleCurrencyMenu() {
+    if (currencyOptions.classList.contains('hidden')) openCurrencyMenu();
+    else {
+      currencyOptions.classList.add('hidden');
+      currencySearch.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  currencySearch.addEventListener('focus', openCurrencyMenu);
+  currencySearch.addEventListener('input', () => {
+    renderCurrencyOptions(currencySearch.value);
+    currencyOptions.classList.remove('hidden');
+  });
+
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#currencySearch') && !event.target.closest('#currencyOptions') && !event.target.closest('[onclick="toggleCurrencyMenu()"])) {
+      currencyOptions.classList.add('hidden');
+    currencySearch.setAttribute('aria-expanded', 'false');
+  }
+  });
+
+  function openAddInvoiceModal() {
+    document.getElementById('addInvoiceModal').classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    if (!document.getElementById('lineItemsContainer').children.length) addLineItem();
+    toggleVatRate();
+  }
+
+  function closeAddInvoiceModal() {
+    document.getElementById('addInvoiceModal').classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  function toggleVatRate() {
+    const treatment = document.getElementById('taxInclusive').value;
+    const rateField = document.getElementById('vatRateField');
+    const rateInput = document.getElementById('taxRate');
+    const hasVat = treatment === 'true' || treatment === 'exclusive';
+    rateField.classList.toggle('hidden', !hasVat);
+    rateInput.required = hasVat;
+    if (!hasVat) rateInput.value = '0';
+  }
+
+  function addLineItem() {
+    const html = `
+        <div class="line-item">
+          <label class="field description-field">
+            <span class="field-label">Description</span>
+            <input type="text" class="theme-input item-description" placeholder="Design services" required>
+          </label>
+          <label class="field quantity-field">
+            <span class="field-label">Qty</span>
+            <input type="number" min="1" step="1" class="theme-input item-quantity" value="1" required>
+          </label>
+          <label class="field price-field">
+            <span class="field-label">Unit price</span>
+            <input type="text" inputmode="decimal" autocomplete="off" class="theme-input item-unit-price" placeholder="100.00" required>
+          </label>
+          <button type="button" onclick="removeLineItem(this)" class="remove-btn" title="Remove item" aria-label="Remove item">×</button>
+        </div>`;
+    document.getElementById('lineItemsContainer').insertAdjacentHTML('beforeend', html);
+  }
+
+  function removeLineItem(btn) {
+    const items = document.querySelectorAll('.line-item');
+    if (items.length === 1) {
+      items[0].querySelector('.item-description').value = '';
+      items[0].querySelector('.item-quantity').value = '1';
+      items[0].querySelector('.item-unit-price').value = '';
+      return;
+    }
+    btn.closest('.line-item').remove();
+  }
+
+  function parseMoney(value) {
+    const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
+    if (!/^\d+(\.\d{0,2})?$/.test(normalized)) return NaN;
+    return Number(normalized);
+  }
+
+  document.getElementById('addInvoiceForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const lineItems = [];
+
+    for (const el of document.querySelectorAll('.line-item')) {
+      const quantity = Number(el.querySelector('.item-quantity').value);
+      const unitPrice = parseMoney(el.querySelector('.item-unit-price').value);
+      const description = el.querySelector('.item-description').value.trim();
+
+      if (!description || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+        alert('Please enter a description, a quantity, and a valid amount such as 100 or 100.16 for every line item.');
+        return;
+      }
+
+      lineItems.push({ description, quantity, unit_price: unitPrice });
+    }
+
+    const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    const taxRate = parseMoney(fd.get('tax_rate')) || 0;
+    const taxTreatment = fd.get('tax_inclusive');
+    let total = subtotal;
+
+    if (taxTreatment === 'exclusive' && taxRate > 0) total = subtotal * (1 + taxRate / 100);
+
+    const payload = {
+      client_name: fd.get('client_name'),
+      client_email: fd.get('client_email'),
+      amount_cents: Math.round((total + Number.EPSILON) * 100),
+      currency: fd.get('currency'),
+      tax_rate: taxRate,
+      tax_inclusive: taxTreatment === 'true',
+      vat_id: fd.get('vat_id'),
+      due_date: fd.get('due_date'),
+      line_items: lineItems,
+      notes: fd.get('notes')
+    };
+
+    const submitButton = form.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating…';
+
+    try {
+      const res = await fetch('/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Unable to create the invoice.');
+      location.reload();
+    } catch (error) {
+      alert(error.message || 'Unable to create the invoice.');
+      submitButton.disabled = false;
+      submitButton.textContent = 'Create invoice';
+    }
+  };
+
+  function filterInvoices() {
+    const search = document.getElementById('searchInput').value.toLowerCase().trim();
+    const status = document.getElementById('statusFilter').value;
+    document.querySelectorAll('.invoice-row').forEach(row => {
+      const searchable = `${row.dataset.client} ${row.dataset.invoice}`.toLowerCase();
+      row.style.display = (searchable.includes(search) && (!status || row.dataset.status === status)) ? '' : 'none';
+    });
+  }
+
+  function pingInvoice(id) {
+    fetch(`/invoices/${id}/ping`, { method: 'POST' })
+            .then(res => { if (!res.ok) throw new Error(); alert('Ping sent!'); })
+            .catch(() => alert('Unable to send the ping.'));
+  }
+
+  function markPaid(id) {
+    fetch(`/invoices/${id}/mark-paid`, { method: 'POST' })
+            .then(res => { if (!res.ok) throw new Error(); location.reload(); })
+            .catch(() => alert('Unable to mark the invoice as paid.'));
+  }
+
+  function reclaimInvoice(id) { alert('Reclaim flow — coming soon'); }
+  function openEditModal(id) { alert('Edit coming soon'); }
+
+  document.getElementById('addInvoiceModal').addEventListener('click', event => {
+    if (event.target.id === 'addInvoiceModal') closeAddInvoiceModal();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeAddInvoiceModal();
+  });
+
+  selectCurrency('USD');
+  toggleVatRate();
+</script>
 </body>
 </html>
-{{end}}
