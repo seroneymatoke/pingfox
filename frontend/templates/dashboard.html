@@ -218,7 +218,7 @@
         {{end}}
       </div>
       <div class="invoice-amount">
-        {{if eq .Currency "USD"}}${{else if eq .Currency "EUR"}}€{{else if eq .Currency "GBP"}}£{{else if eq .Currency "JPY"}}¥{{else if eq .Currency "INR"}}₹{{else if eq .Currency "KRW"}}₩{{else if eq .Currency "CNY"}}¥{{else if eq .Currency "TRY"}}₺{{end}}{{printf "%.2f" (div .AmountCents 100.0)}}
+        {{if eq .Currency "USD"}}${{else if eq .Currency "EUR"}}€{{else if eq .Currency "GBP"}}£{{else if eq .Currency "JPY"}}¥{{else if eq .Currency "INR"}}₹{{else if eq .Currency "KRW"}}₩{{else if eq .Currency "CNY"}}¥{{else if eq .Currency "TRY"}}₺{{end}}{{.AmountCents}}
         <span class="text-xs font-inter text-zinc-500 tracking-wider">{{.Currency}}</span>
       </div>
       {{if eq .Status "paid"}}
@@ -272,9 +272,52 @@
           <span class="field-label">Client name</span>
           <input type="text" name="client_name" placeholder="Marigold Studio" required class="theme-input">
         </label>
+
+
         <label class="field col-span-12 sm:col-span-6">
           <span class="field-label">Client email</span>
           <input type="email" name="client_email" placeholder="billing@client.com" required class="theme-input">
+        </label>
+
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Invoice number</span>
+          <input type="text"
+                 name="invoice_number"
+                 class="theme-input"
+                 placeholder="e.g. PF-2026-0001">
+          <span class="text-xs text-zinc-500">
+    Leave blank to generate it automatically.
+  </span>
+        </label>
+
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Invoice issue date</span>
+          <input type="date"
+                 name="issue_date"
+                 class="theme-input"
+                 required>
+        </label>
+
+        <label class="field col-span-12">
+          <span class="field-label">Client billing address <span class="text-zinc-600">(optional)</span></span>
+          <textarea name="client_address"
+                    class="theme-textarea"
+                    placeholder="Company name&#10;Street and number&#10;Postcode City&#10;Country"></textarea>
+        </label>
+
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Due date</span>
+          <input type="date"
+                 name="due_date"
+                 class="theme-input"
+                 required>
+        </label>
+
+        <label class="field col-span-12 sm:col-span-6">
+          <span class="field-label">Service / supply date <span class="text-zinc-600">(optional)</span></span>
+          <input type="date"
+                 name="service_date"
+                 class="theme-input">
         </label>
 
         <label class="field col-span-12 sm:col-span-4">
@@ -292,19 +335,31 @@
           <input type="date" name="due_date" required class="theme-input">
         </label>
 
-        <div class="field col-span-12 sm:col-span-4">
-          <label for="taxInclusive" class="field-label">VAT / tax treatment</label>
-          <select name="tax_inclusive" id="taxInclusive" class="theme-select" onchange="toggleVatRate()">
-            <option value="false" selected>No VAT / tax</option>
-            <option value="true">VAT / tax included</option>
-            <option value="exclusive">VAT / tax added on top</option>
+        <label class="field col-span-12 sm:col-span-4">
+          <span class="field-label">VAT treatment</span>
+          <select name="vat_treatment" id="vatTreatment"
+                  class="theme-select"
+                  onchange="toggleVatFields()">
+            <option value="none" selected>No VAT</option>
+            <option value="inclusive">VAT inclusive</option>
+            <option value="exclusive">VAT exclusive</option>
           </select>
-        </div>
-
-        <label id="vatRateField" class="field col-span-12 sm:col-span-6 hidden">
-          <span class="field-label">VAT percentage</span>
-          <input type="number" step="0.01" min="0" max="100" name="tax_rate" id="taxRate" placeholder="e.g. 19" value="0" class="theme-input">
         </label>
+
+        <label id="vatRateField" class="field col-span-12 sm:col-span-4 hidden">
+          <span class="field-label">VAT percentage</span>
+          <input type="number"
+                 name="vat_rate"
+                 id="vatRate"
+                 class="theme-input"
+                 min="0"
+                 max="100"
+                 step="0.01"
+                 placeholder="e.g. 19"
+                 value="19"
+                 oninput="updateInvoiceTotals()">
+        </label>
+
 
         <label class="field col-span-12 sm:col-span-6">
           <span class="field-label">VAT ID (optional)</span>
@@ -323,6 +378,25 @@
         <div id="lineItemsContainer" class="space-y-3"></div>
       </div>
 
+      <div class="border-t border-zinc-800 pt-5">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div class="rounded-xl border border-zinc-800 bg-[#151515] p-4">
+            <p class="text-zinc-500 text-xs uppercase tracking-wider">Subtotal</p>
+            <p id="subtotalAmount" class="mt-1 text-lg font-fraunces">0.00</p>
+          </div>
+
+          <div class="rounded-xl border border-zinc-800 bg-[#151515] p-4">
+            <p id="vatSummaryLabel" class="text-zinc-500 text-xs uppercase tracking-wider">VAT</p>
+            <p id="vatAmount" class="mt-1 text-lg font-fraunces">0.00</p>
+          </div>
+
+          <div class="rounded-xl border border-orange/40 bg-[#1b120f] p-4">
+            <p class="text-orange text-xs uppercase tracking-wider">Total due</p>
+            <p id="totalAmount" class="mt-1 text-xl font-fraunces text-orange">0.00</p>
+          </div>
+        </div>
+      </div>
+
       <label class="field">
         <span class="field-label">Notes (optional)</span>
         <textarea name="notes" placeholder="Payment details or a note to the client" class="theme-textarea"></textarea>
@@ -337,258 +411,315 @@
 </div>
 
 <script>
+  function filterInvoices() {
+    const search = document.getElementById("searchInput").value
+            .toLowerCase()
+            .trim();
+
+    const status = document.getElementById("statusFilter").value;
+
+    document.querySelectorAll(".invoice-row").forEach((row) => {
+      const client = (row.dataset.client || "").toLowerCase();
+      const invoice = (row.dataset.invoice || "").toLowerCase();
+      const rowStatus = (row.dataset.status || "").toLowerCase();
+
+      const searchMatches =
+              !search ||
+              client.includes(search) ||
+              invoice.includes(search);
+
+      const statusMatches =
+              !status ||
+              rowStatus === status;
+
+      row.style.display = searchMatches && statusMatches ? "" : "none";
+    });
+  }
   const currencies = [
-    ['AED', 'د.إ', 'United Arab Emirates Dirham'], ['AFN', '؋', 'Afghan Afghani'], ['ALL', 'L', 'Albanian Lek'], ['AMD', '֏', 'Armenian Dram'],
-    ['ANG', 'ƒ', 'Netherlands Antillean Guilder'], ['AOA', 'Kz', 'Angolan Kwanza'], ['ARS', '$', 'Argentine Peso'], ['AUD', 'A$', 'Australian Dollar'],
-    ['AWG', 'ƒ', 'Aruban Florin'], ['AZN', '₼', 'Azerbaijani Manat'], ['BAM', 'KM', 'Bosnia-Herzegovina Convertible Mark'], ['BBD', 'Bds$', 'Barbadian Dollar'],
-    ['BDT', '৳', 'Bangladeshi Taka'], ['BGN', 'лв', 'Bulgarian Lev'], ['BHD', 'ب.د', 'Bahraini Dinar'], ['BIF', 'FBu', 'Burundian Franc'],
-    ['BMD', '$', 'Bermudan Dollar'], ['BND', 'B$', 'Brunei Dollar'], ['BOB', 'Bs.', 'Bolivian Boliviano'], ['BRL', 'R$', 'Brazilian Real'],
-    ['BSD', 'B$', 'Bahamian Dollar'], ['BTN', 'Nu.', 'Bhutanese Ngultrum'], ['BWP', 'P', 'Botswana Pula'], ['BYN', 'Br', 'Belarusian Ruble'],
-    ['BZD', 'BZ$', 'Belize Dollar'], ['CAD', 'C$', 'Canadian Dollar'], ['CDF', 'FC', 'Congolese Franc'], ['CHF', 'CHF', 'Swiss Franc'],
-    ['CLP', '$', 'Chilean Peso'], ['CNY', '¥', 'Chinese Yuan'], ['COP', '$', 'Colombian Peso'], ['CRC', '₡', 'Costa Rican Colón'],
-    ['CUP', '₱', 'Cuban Peso'], ['CVE', '$', 'Cape Verdean Escudo'], ['CZK', 'Kč', 'Czech Koruna'], ['DJF', 'Fdj', 'Djiboutian Franc'],
-    ['DKK', 'kr', 'Danish Krone'], ['DOP', 'RD$', 'Dominican Peso'], ['DZD', 'د.ج', 'Algerian Dinar'], ['EGP', 'E£', 'Egyptian Pound'],
-    ['ERN', 'Nfk', 'Eritrean Nakfa'], ['ETB', 'Br', 'Ethiopian Birr'], ['EUR', '€', 'Euro'], ['FJD', 'FJ$', 'Fijian Dollar'],
-    ['FKP', '£', 'Falkland Islands Pound'], ['FOK', 'kr', 'Faroese Króna'], ['GBP', '£', 'British Pound Sterling'], ['GEL', '₾', 'Georgian Lari'],
-    ['GGP', '£', 'Guernsey Pound'], ['GHS', '₵', 'Ghanaian Cedi'], ['GIP', '£', 'Gibraltar Pound'], ['GMD', 'D', 'Gambian Dalasi'],
-    ['GNF', 'FG', 'Guinean Franc'], ['GTQ', 'Q', 'Guatemalan Quetzal'], ['GYD', 'G$', 'Guyanese Dollar'], ['HKD', 'HK$', 'Hong Kong Dollar'],
-    ['HNL', 'L', 'Honduran Lempira'], ['HRK', 'kn', 'Croatian Kuna'], ['HTG', 'G', 'Haitian Gourde'], ['HUF', 'Ft', 'Hungarian Forint'],
-    ['IDR', 'Rp', 'Indonesian Rupiah'], ['ILS', '₪', 'Israeli New Shekel'], ['IMP', '£', 'Manx Pound'], ['INR', '₹', 'Indian Rupee'],
-    ['IQD', 'ع.د', 'Iraqi Dinar'], ['IRR', '﷼', 'Iranian Rial'], ['ISK', 'kr', 'Icelandic Króna'], ['JEP', '£', 'Jersey Pound'],
-    ['JMD', 'J$', 'Jamaican Dollar'], ['JOD', 'د.ا', 'Jordanian Dinar'], ['JPY', '¥', 'Japanese Yen'], ['KES', 'KSh', 'Kenyan Shilling'],
-    ['KGS', 'с', 'Kyrgyzstani Som'], ['KHR', '៛', 'Cambodian Riel'], ['KID', '$', 'Kiribati Dollar'], ['KMF', 'CF', 'Comorian Franc'],
-    ['KRW', '₩', 'South Korean Won'], ['KWD', 'د.ك', 'Kuwaiti Dinar'], ['KYD', '$', 'Cayman Islands Dollar'], ['KZT', '₸', 'Kazakhstani Tenge'],
-    ['LAK', '₭', 'Laotian Kip'], ['LBP', 'ل.ل', 'Lebanese Pound'], ['LKR', 'Rs', 'Sri Lankan Rupee'], ['LRD', 'L$', 'Liberian Dollar'],
-    ['LSL', 'L', 'Lesotho Loti'], ['LYD', 'ل.د', 'Libyan Dinar'], ['MAD', 'د.م.', 'Moroccan Dirham'], ['MDL', 'L', 'Moldovan Leu'],
-    ['MGA', 'Ar', 'Malagasy Ariary'], ['MKD', 'ден', 'Macedonian Denar'], ['MMK', 'K', 'Myanmar Kyat'], ['MNT', '₮', 'Mongolian Tögrög'],
-    ['MOP', 'P', 'Macanese Pataca'], ['MRU', 'UM', 'Mauritanian Ouguiya'], ['MUR', '₨', 'Mauritian Rupee'], ['MVR', 'Rf', 'Maldivian Rufiyaa'],
-    ['MWK', 'MK', 'Malawian Kwacha'], ['MXN', 'MX$', 'Mexican Peso'], ['MYR', 'RM', 'Malaysian Ringgit'], ['MZN', 'MT', 'Mozambican Metical'],
-    ['NAD', 'N$', 'Namibian Dollar'], ['NGN', '₦', 'Nigerian Naira'], ['NIO', 'C$', 'Nicaraguan Córdoba'], ['NOK', 'kr', 'Norwegian Krone'],
-    ['NPR', 'रू', 'Nepalese Rupee'], ['NZD', 'NZ$', 'New Zealand Dollar'], ['OMR', 'ر.ع.', 'Omani Rial'], ['PAB', 'B/.', 'Panamanian Balboa'],
-    ['PEN', 'S/', 'Peruvian Sol'], ['PGK', 'K', 'Papua New Guinean Kina'], ['PHP', '₱', 'Philippine Peso'], ['PKR', '₨', 'Pakistani Rupee'],
-    ['PLN', 'zł', 'Polish Złoty'], ['PYG', '₲', 'Paraguayan Guaraní'], ['QAR', 'ر.ق', 'Qatari Riyal'], ['RON', 'lei', 'Romanian Leu'],
-    ['RSD', 'дин.', 'Serbian Dinar'], ['RUB', '₽', 'Russian Ruble'], ['RWF', 'FRw', 'Rwandan Franc'], ['SAR', 'ر.س', 'Saudi Riyal'],
-    ['SBD', 'SI$', 'Solomon Islands Dollar'], ['SCR', '₨', 'Seychellois Rupee'], ['SDG', 'ج.س.', 'Sudanese Pound'], ['SEK', 'kr', 'Swedish Krona'],
-    ['SGD', 'S$', 'Singapore Dollar'], ['SHP', '£', 'Saint Helena Pound'], ['SLE', 'Le', 'Sierra Leonean Leone'], ['SLL', 'Le', 'Sierra Leonean Leone'],
-    ['SOS', 'Sh', 'Somali Shilling'], ['SRD', '$', 'Surinamese Dollar'], ['SSP', '£', 'South Sudanese Pound'], ['STN', 'Db', 'São Tomé and Príncipe Dobra'],
-    ['SYP', '£', 'Syrian Pound'], ['SZL', 'E', 'Swazi Lilangeni'], ['THB', '฿', 'Thai Baht'], ['TJS', 'ЅМ', 'Tajikistani Somoni'],
-    ['TMT', 'm', 'Turkmenistani Manat'], ['TND', 'د.ت', 'Tunisian Dinar'], ['TOP', 'T$', 'Tongan Paʻanga'], ['TRY', '₺', 'Turkish Lira'],
-    ['TTD', 'TT$', 'Trinidad and Tobago Dollar'], ['TVD', '$', 'Tuvaluan Dollar'], ['TWD', 'NT$', 'New Taiwan Dollar'], ['TZS', 'TSh', 'Tanzanian Shilling'],
-    ['UAH', '₴', 'Ukrainian Hryvnia'], ['UGX', 'USh', 'Ugandan Shilling'], ['USD', '$', 'United States Dollar'], ['UYU', '$U', 'Uruguayan Peso'],
-    ['UZS', "so'm", 'Uzbekistani Som'], ['VES', 'Bs.', 'Venezuelan Bolívar'], ['VND', '₫', 'Vietnamese Đồng'], ['VUV', 'Vt', 'Vanuatu Vatu'],
-    ['WST', 'WS$', 'Samoan Tālā'], ['XAF', 'FCFA', 'Central African CFA Franc'], ['XCD', 'EC$', 'East Caribbean Dollar'], ['XOF', 'CFA', 'West African CFA Franc'],
-    ['XPF', '₣', 'CFP Franc'], ['YER', '﷼', 'Yemeni Rial'], ['ZAR', 'R', 'South African Rand'], ['ZMW', 'ZK', 'Zambian Kwacha'], ['ZWL', 'Z$', 'Zimbabwean Dollar']
+    ["USD", "$", "United States Dollar"],
+    ["EUR", "€", "Euro"],
+    ["GBP", "£", "British Pound Sterling"],
+    ["JPY", "¥", "Japanese Yen"],
+    ["CHF", "CHF", "Swiss Franc"],
+    ["CAD", "C$", "Canadian Dollar"],
+    ["AUD", "A$", "Australian Dollar"],
+    ["NZD", "NZ$", "New Zealand Dollar"],
+    ["CNY", "¥", "Chinese Yuan"],
+    ["INR", "₹", "Indian Rupee"],
+    ["KRW", "₩", "South Korean Won"],
+    ["BRL", "R$", "Brazilian Real"],
+    ["MXN", "MX$", "Mexican Peso"],
+    ["ZAR", "R", "South African Rand"],
+    ["NGN", "₦", "Nigerian Naira"],
+    ["TRY", "₺", "Turkish Lira"],
+    ["PLN", "zł", "Polish Złoty"],
+    ["SEK", "kr", "Swedish Krona"],
+    ["NOK", "kr", "Norwegian Krone"],
+    ["DKK", "kr", "Danish Krone"],
+    ["CZK", "Kč", "Czech Koruna"],
+    ["HUF", "Ft", "Hungarian Forint"],
+    ["RON", "lei", "Romanian Leu"],
+    ["UAH", "₴", "Ukrainian Hryvnia"],
+    ["AED", "د.إ", "United Arab Emirates Dirham"],
+    ["SAR", "ر.س", "Saudi Riyal"],
+    ["QAR", "ر.ق", "Qatari Riyal"],
+    ["SGD", "S$", "Singapore Dollar"],
+    ["HKD", "HK$", "Hong Kong Dollar"],
+    ["THB", "฿", "Thai Baht"],
+    ["IDR", "Rp", "Indonesian Rupiah"],
+    ["MYR", "RM", "Malaysian Ringgit"],
+    ["PHP", "₱", "Philippine Peso"],
+    ["VND", "₫", "Vietnamese Đồng"],
+    ["PKR", "₨", "Pakistani Rupee"],
+    ["BDT", "৳", "Bangladeshi Taka"],
+    ["ILS", "₪", "Israeli New Shekel"],
+    ["EGP", "E£", "Egyptian Pound"],
+    ["KES", "KSh", "Kenyan Shilling"],
+    ["GHS", "₵", "Ghanaian Cedi"],
+    ["RUB", "₽", "Russian Ruble"]
   ];
 
   const currencySearch = document.getElementById('currencySearch');
   const currencyValue = document.getElementById('currency');
   const currencyOptions = document.getElementById('currencyOptions');
 
-  function currencyLabel(currency) {
-    return `${currency[1]} ${currency[0]} — ${currency[2]}`;
-  }
-
   function renderCurrencyOptions(query = '') {
-    const search = query.trim().toLowerCase();
-    const matches = currencies.filter(([code, symbol, name]) => `${code} ${symbol} ${name}`.toLowerCase().includes(search));
-    currencyOptions.innerHTML = matches.length ? matches.map(currency => `
-        <button type="button" class="currency-option ${currency[0] === currencyValue.value ? 'is-active' : ''}" data-code="${currency[0]}">
-          <span>${currencyLabel(currency)}</span><span class="currency-option-code">${currency[0]}</span>
-        </button>
-      `).join('') : '<p class="px-4 py-3 text-sm text-zinc-500">No currency found.</p>';
+    const needle = query.trim().toLowerCase();
 
-    currencyOptions.querySelectorAll('.currency-option').forEach(button => {
-      button.addEventListener('click', () => selectCurrency(button.dataset.code));
+    const matches = currencies.filter((currency) => {
+      return (
+              currency.code.toLowerCase().includes(needle) ||
+              currency.name.toLowerCase().includes(needle) ||
+              currency.symbol.toLowerCase().includes(needle)
+      );
     });
+
+    currencyOptions.innerHTML = '';
+
+    if (matches.length === 0) {
+      currencyOptions.innerHTML = `
+      <div class="px-4 py-3 text-sm text-zinc-500">
+        No currencies found.
+      </div>
+    `;
+      return;
+    }
+
+    for (const currency of matches) {
+      const option = document.createElement('button');
+
+      option.type = 'button';
+      option.className =
+              'currency-option' +
+              (currency.code === currencyValue.value ? ' is-active' : '');
+
+      option.innerHTML = `
+      <span>${currency.symbol} ${currency.name}</span>
+      <span class="currency-option-code">${currency.code}</span>
+    `;
+
+      option.addEventListener('click', () => selectCurrency(currency));
+      currencyOptions.appendChild(option);
+    }
   }
 
-  function selectCurrency(code) {
-    const currency = currencies.find(item => item[0] === code);
-    if (!currency) return;
-    currencyValue.value = code;
-    currencySearch.value = currencyLabel(currency);
+  function toggleCurrencyMenu() {
+    const isHidden = currencyOptions.classList.contains('hidden');
+
+    if (isHidden) {
+      renderCurrencyOptions(currencySearch.value);
+      currencyOptions.classList.remove('hidden');
+      currencySearch.setAttribute('aria-expanded', 'true');
+      currencySearch.focus();
+    } else {
+      closeCurrencyMenu();
+    }
+  }
+
+  function closeCurrencyMenu() {
     currencyOptions.classList.add('hidden');
     currencySearch.setAttribute('aria-expanded', 'false');
   }
 
-  function openCurrencyMenu() {
+  function selectCurrency(currency) {
+    currencyValue.value = currency.code;
+    currencySearch.value = `${currency.symbol} ${currency.code} — ${currency.name}`;
+    renderCurrencyOptions(currencySearch.value);
+    closeCurrencyMenu();
+  }
+
+  currencySearch.addEventListener('focus', () => {
     renderCurrencyOptions(currencySearch.value);
     currencyOptions.classList.remove('hidden');
     currencySearch.setAttribute('aria-expanded', 'true');
-  }
+  });
 
-  function toggleCurrencyMenu() {
-    if (currencyOptions.classList.contains('hidden')) openCurrencyMenu();
-    else {
-      currencyOptions.classList.add('hidden');
-      currencySearch.setAttribute('aria-expanded', 'false');
-    }
-  }
-
-  currencySearch.addEventListener('focus', openCurrencyMenu);
   currencySearch.addEventListener('input', () => {
     renderCurrencyOptions(currencySearch.value);
     currencyOptions.classList.remove('hidden');
   });
 
-  document.addEventListener('click', event => {
-    if (!event.target.closest('#currencySearch') && !event.target.closest('#currencyOptions') && !event.target.closest('[onclick="toggleCurrencyMenu()"])) {
-      currencyOptions.classList.add('hidden');
-    currencySearch.setAttribute('aria-expanded', 'false');
-  }
+  currencySearch.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeCurrencyMenu();
+    }
   });
 
+  document.addEventListener('click', (event) => {
+    const currencyControl = currencySearch.closest('.relative');
+
+    if (currencyControl && !currencyControl.contains(event.target)) {
+      closeCurrencyMenu();
+    }
+  });
+
+  // Give the default hidden input a visible starting value.
+  selectCurrency(currencies.find((currency) => currency.code === 'USD'));
+
   function openAddInvoiceModal() {
-    document.getElementById('addInvoiceModal').classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-    if (!document.getElementById('lineItemsContainer').children.length) addLineItem();
-    toggleVatRate();
+    const modal = document.getElementById('addInvoiceModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    const container = document.getElementById('lineItemsContainer');
+    if (container.children.length === 0) {
+      addLineItem();
+    }
   }
 
   function closeAddInvoiceModal() {
-    document.getElementById('addInvoiceModal').classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
+    const modal = document.getElementById('addInvoiceModal');
+    modal.classList.remove('active');
+    modal.classList.add('hidden');
   }
-
-  function toggleVatRate() {
-    const treatment = document.getElementById('taxInclusive').value;
-    const rateField = document.getElementById('vatRateField');
-    const rateInput = document.getElementById('taxRate');
-    const hasVat = treatment === 'true' || treatment === 'exclusive';
-    rateField.classList.toggle('hidden', !hasVat);
-    rateInput.required = hasVat;
-    if (!hasVat) rateInput.value = '0';
-  }
-
-  function addLineItem() {
-    const html = `
-        <div class="line-item">
-          <label class="field description-field">
-            <span class="field-label">Description</span>
-            <input type="text" class="theme-input item-description" placeholder="Design services" required>
-          </label>
-          <label class="field quantity-field">
-            <span class="field-label">Qty</span>
-            <input type="number" min="1" step="1" class="theme-input item-quantity" value="1" required>
-          </label>
-          <label class="field price-field">
-            <span class="field-label">Unit price</span>
-            <input type="text" inputmode="decimal" autocomplete="off" class="theme-input item-unit-price" placeholder="100.00" required>
-          </label>
-          <button type="button" onclick="removeLineItem(this)" class="remove-btn" title="Remove item" aria-label="Remove item">×</button>
-        </div>`;
-    document.getElementById('lineItemsContainer').insertAdjacentHTML('beforeend', html);
-  }
-
-  function removeLineItem(btn) {
-    const items = document.querySelectorAll('.line-item');
-    if (items.length === 1) {
-      items[0].querySelector('.item-description').value = '';
-      items[0].querySelector('.item-quantity').value = '1';
-      items[0].querySelector('.item-unit-price').value = '';
-      return;
-    }
-    btn.closest('.line-item').remove();
-  }
-
-  function parseMoney(value) {
-    const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
-    if (!/^\d+(\.\d{0,2})?$/.test(normalized)) return NaN;
-    return Number(normalized);
-  }
-
   document.getElementById('addInvoiceForm').onsubmit = async (e) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const lineItems = [];
+    const fd = new FormData(e.target);
+    const res = await fetch('/invoices', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        client_name: fd.get('client_name'),
+        client_email: fd.get('client_email'),
+        amount_cents: Math.round(parseFloat(fd.get('amount')) * 100),
+        currency: fd.get('currency'),
+        due_date: fd.get('due_date')
+      })
+    });
+    if(res.ok) location.reload();
+    else alert('Error creating invoice');
+  };
+  function addLineItem() {
+    const container = document.getElementById('lineItemsContainer');
 
-    for (const el of document.querySelectorAll('.line-item')) {
-      const quantity = Number(el.querySelector('.item-quantity').value);
-      const unitPrice = parseMoney(el.querySelector('.item-unit-price').value);
-      const description = el.querySelector('.item-description').value.trim();
+    const item = document.createElement('div');
+    item.className = 'line-item';
 
-      if (!description || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) {
-        alert('Please enter a description, a quantity, and a valid amount such as 100 or 100.16 for every line item.');
-        return;
-      }
+    item.innerHTML = `
+    <label class="field description-field">
+      <span class="field-label">Description</span>
+      <input type="text" class="theme-input line-description"
+             placeholder="Design services" required>
+    </label>
 
-      lineItems.push({ description, quantity, unit_price: unitPrice });
+    <label class="field quantity-field">
+      <span class="field-label">Qty</span>
+      <input type="number" class="theme-input line-quantity"
+             min="1" step="1" value="1" required>
+    </label>
+
+    <label class="field price-field">
+      <span class="field-label">Unit price</span>
+      <input type="number" class="theme-input line-price"
+             min="0" step="0.01" placeholder="100.00" required>
+    </label>
+
+    <button type="button" class="remove-btn"
+            onclick="removeLineItem(this)"
+            aria-label="Remove line item">
+      ×
+    </button>
+  `;
+
+    item.querySelector('.line-quantity').addEventListener('input', updateInvoiceTotals);
+    item.querySelector('.line-price').addEventListener('input', updateInvoiceTotals);
+
+    container.appendChild(item);
+
+    // Show correct values as soon as a blank item is added.
+    updateInvoiceTotals();
+  }
+
+  function removeLineItem(button) {
+    const item = button.closest('.line-item');
+
+    // Keep at least one item in the invoice form.
+    if (document.querySelectorAll('#lineItemsContainer .line-item').length > 1) {
+      item.remove();
+      return;
     }
 
-    const subtotal = lineItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-    const taxRate = parseMoney(fd.get('tax_rate')) || 0;
-    const taxTreatment = fd.get('tax_inclusive');
+    item.querySelector('.line-description').value = '';
+    item.querySelector('.line-quantity').value = '1';
+    item.querySelector('.line-price').value = '';
+    // Show correct values as soon as a blank item is added.
+    updateInvoiceTotals();
+  }
+  function toggleVatFields() {
+    const treatment = document.getElementById('vatTreatment').value;
+    const vatRateField = document.getElementById('vatRateField');
+
+    vatRateField.classList.toggle('hidden', treatment === 'none');
+    updateInvoiceTotals();
+  }
+
+  function currencyCode() {
+    return document.getElementById('currency').value || 'EUR';
+  }
+
+  function money(value) {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currencyCode()
+    }).format(value);
+  }
+
+  function lineItemSubtotal() {
+    return [...document.querySelectorAll('#lineItemsContainer .line-item')]
+            .reduce((sum, item) => {
+              const quantity = Number(item.querySelector('.line-quantity')?.value || 0);
+              const unitPrice = Number(item.querySelector('.line-price')?.value || 0);
+              return sum + quantity * unitPrice;
+            }, 0);
+  }
+
+  function updateInvoiceTotals() {
+    const subtotal = lineItemSubtotal();
+    const treatment = document.getElementById('vatTreatment').value;
+    const rate = Number(document.getElementById('vatRate').value || 0) / 100;
+
+    let vat = 0;
     let total = subtotal;
 
-    if (taxTreatment === 'exclusive' && taxRate > 0) total = subtotal * (1 + taxRate / 100);
-
-    const payload = {
-      client_name: fd.get('client_name'),
-      client_email: fd.get('client_email'),
-      amount_cents: Math.round((total + Number.EPSILON) * 100),
-      currency: fd.get('currency'),
-      tax_rate: taxRate,
-      tax_inclusive: taxTreatment === 'true',
-      vat_id: fd.get('vat_id'),
-      due_date: fd.get('due_date'),
-      line_items: lineItems,
-      notes: fd.get('notes')
-    };
-
-    const submitButton = form.querySelector('[type="submit"]');
-    submitButton.disabled = true;
-    submitButton.textContent = 'Creating…';
-
-    try {
-      const res = await fetch('/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Unable to create the invoice.');
-      location.reload();
-    } catch (error) {
-      alert(error.message || 'Unable to create the invoice.');
-      submitButton.disabled = false;
-      submitButton.textContent = 'Create invoice';
+    if (treatment === 'exclusive') {
+      vat = subtotal * rate;
+      total = subtotal + vat;
     }
-  };
 
-  function filterInvoices() {
-    const search = document.getElementById('searchInput').value.toLowerCase().trim();
-    const status = document.getElementById('statusFilter').value;
-    document.querySelectorAll('.invoice-row').forEach(row => {
-      const searchable = `${row.dataset.client} ${row.dataset.invoice}`.toLowerCase();
-      row.style.display = (searchable.includes(search) && (!status || row.dataset.status === status)) ? '' : 'none';
-    });
+    if (treatment === 'inclusive') {
+      total = subtotal;
+      vat = subtotal - subtotal / (1 + rate);
+    }
+
+    document.getElementById('subtotalAmount').textContent = money(subtotal);
+    document.getElementById('vatAmount').textContent = money(vat);
+    document.getElementById('totalAmount').textContent = money(total);
+
+    const label = treatment === 'none'
+            ? 'VAT'
+            : `VAT (${(rate * 100).toFixed(2).replace(/\.00$/, '')}%)`;
+
+    document.getElementById('vatSummaryLabel').textContent = label;
   }
-
-  function pingInvoice(id) {
-    fetch(`/invoices/${id}/ping`, { method: 'POST' })
-            .then(res => { if (!res.ok) throw new Error(); alert('Ping sent!'); })
-            .catch(() => alert('Unable to send the ping.'));
-  }
-
-  function markPaid(id) {
-    fetch(`/invoices/${id}/mark-paid`, { method: 'POST' })
-            .then(res => { if (!res.ok) throw new Error(); location.reload(); })
-            .catch(() => alert('Unable to mark the invoice as paid.'));
-  }
-
-  function reclaimInvoice(id) { alert('Reclaim flow — coming soon'); }
-  function openEditModal(id) { alert('Edit coming soon'); }
-
-  document.getElementById('addInvoiceModal').addEventListener('click', event => {
-    if (event.target.id === 'addInvoiceModal') closeAddInvoiceModal();
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeAddInvoiceModal();
-  });
-
-  selectCurrency('USD');
-  toggleVatRate();
 </script>
 </body>
 </html>
