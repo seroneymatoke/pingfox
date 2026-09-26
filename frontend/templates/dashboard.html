@@ -280,7 +280,8 @@
     <article class="invoice-row" data-status="{{.Status}}" data-client="{{.ClientName}}" data-invoice="{{.ID}}">
       <div>
         <div class="invoice-client">{{.ClientName}}</div>
-        <div class="invoice-meta">Invoice {{.ID}} · Due {{.DueDate.Format "Jan 2, 2006"}}</div>
+        <div class="invoice-meta">Invoice {{if .InvoiceNumber}}{{.InvoiceNumber}}{{else}}Draft{{end}}
+          · Due {{.DueDate.Format "Jan 2, 2006"}}</div>
         {{if .LastPingAt}}
         <div class="invoice-lastping">Last ping {{.LastPingAt.Format "Jan 2"}} · {{.PingsSent}} pings sent</div>
         {{else}}

@@ -492,15 +492,25 @@ func (s *Server) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"currency must be a 3-letter ISO code"}`, http.StatusBadRequest)
 		return
 	}
+	invoiceNumber := strings.TrimSpace(req.InvoiceNumber)
+	if invoiceNumber == "" {
+		invoiceNumber = fmt.Sprintf(
+			"PF-%d-%04d",
+			time.Now().Year(),
+			count+1,
+		)
+	}
 	inv, err := s.Store.CreateInvoice(&models.Invoice{
-		UserID:      user.ID,
-		ClientName:  req.ClientName,
-		ClientEmail: req.ClientEmail,
-		AmountCents: req.AmountCents,
-		Currency:    currency,
-		DueDate:     dueDate,
-		Status:      models.StatusPending,
+		UserID:        user.ID,
+		ClientName:    req.ClientName,
+		ClientEmail:   req.ClientEmail,
+		InvoiceNumber: invoiceNumber,
+		AmountCents:   req.AmountCents,
+		Currency:      currency,
+		DueDate:       dueDate,
+		Status:        models.StatusPending,
 	})
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
