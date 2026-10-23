@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { FoxMark } from './Brand';
+import { Settings } from './Settings';
 import { Toast } from './Toast';
 
-export function Dashboard({ onLogout }) {
+export function Dashboard({ user, onLogout, onUserUpdated }) {
   const [invoices, setInvoices] = useState([]);
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [view, setView] = useState('invoices');
 
   async function loadInvoices() {
     const response = await fetch('/api/dashboard', { credentials: 'include' });
@@ -43,8 +45,10 @@ export function Dashboard({ onLogout }) {
     onLogout();
   }
 
+  if (view === 'settings') return <Settings user={user} onBack={() => setView('invoices')} onSaved={onUserUpdated} />;
+
   return <main className="dashboard-shell">
-    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><button className="quiet-button" onClick={logout}>Log out</button></header>
+    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav"><button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>
     <section className="dashboard-heading"><div><p className="eyebrow">Your workspace</p><h1>Invoices</h1><p className="dashboard-subtitle">Keep every follow-up moving without chasing it yourself.</p></div><button className="primary-button">Add invoice</button></section>
     <section className="dashboard-summary" aria-label="Invoice summary">
       <div className="dashboard-summary-item"><span>Active invoices</span><strong>{invoices.length}</strong></div>

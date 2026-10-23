@@ -34,7 +34,7 @@ export default function App() {
 
   if (authLoading) return <main className="auth-loading" aria-label="Loading PingFox">Loading PingFox…</main>;
   if (user && !user.onboarding_complete) return <Onboarding user={user} onComplete={setUser} showConfirmation={verificationConfirmed} />;
-  if (user) return <Dashboard onLogout={() => { setUser(null); goToLanding(); }} />;
+  if (user) return <Dashboard user={user} onUserUpdated={setUser} onLogout={() => { setUser(null); goToLanding(); }} />;
   if (pendingVerification) return <VerifyEmail email={pendingVerification.email} onBackToLanding={() => { setPendingVerification(null); goToLanding(); }} />;
   if (view === 'login') return <Login onLogin={setUser} onRegister={goToRegister} onBackToLanding={goToLanding} />;
   if (view === 'register') return <Register onRegister={data => { setPendingVerification(data); setView('verify'); }} onBackToLanding={goToLanding} />;
