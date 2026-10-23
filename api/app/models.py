@@ -14,6 +14,15 @@ from cryptography.fernet import Fernet
 from psycopg.rows import dict_row
 
 PRIVATE_FIELDS = ("phone", "tax_id", "residence_address", "city", "region", "postal_code")
+USER_FIELDS = (
+    "id", "email", "password", "email_verified", "verification_token_hash", "verification_expires_at",
+    "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted",
+    "privacy_accepted", "plan", "api_key",
+)
+INVOICE_FIELDS = (
+    "id", "user_id", "client_name", "client_email", "amount_cents", "due_date", "status",
+    "pings_sent", "last_ping_at", "invoice_number",
+)
 
 
 def _database_url() -> str:
@@ -85,6 +94,9 @@ class Repository:
         self.users: dict[int, User] = {}
         self.invoices: dict[int, Invoice] = {}
         self.sessions: dict[str, int] = {}
+        self.user_columns: set[str] = set()
+        self.invoice_columns: set[str] = set()
+        self.session_columns: set[str] = set()
         self._initialize()
         self._load()
 
@@ -126,7 +138,7 @@ class Repository:
             )
             if self.is_postgres:
                 self._execute(connection, schema)
-                columns = {row["column_name"] for row in self._execute(connection, "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")}
+                columns = {row["column_name"] for row in self._execute(connection, "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'users'")}
             else:
                 connection.executescript(schema)
                 columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(users)")}
@@ -138,26 +150,66 @@ class Repository:
             for column, statement in migrations.items():
                 if column not in columns:
                     self._execute(connection, statement)
+            if "password" not in columns and "password_hash" not in columns:
+                self._execute(connection, "ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ''")
+            for column, definition in {
+                "full_name": "TEXT NOT NULL DEFAULT ''",
+                "phone": "TEXT NOT NULL DEFAULT ''",
+                "tax_id": "TEXT NOT NULL DEFAULT ''",
+                "residence_address": "TEXT NOT NULL DEFAULT ''",
+                "city": "TEXT NOT NULL DEFAULT ''",
+                "region": "TEXT NOT NULL DEFAULT ''",
+                "postal_code": "TEXT NOT NULL DEFAULT ''",
+                "country": "TEXT NOT NULL DEFAULT ''",
+                "timezone": "TEXT NOT NULL DEFAULT 'UTC'",
+                "terms_accepted": ("BOOLEAN" if self.is_postgres else "INTEGER") + " NOT NULL DEFAULT " + ("FALSE" if self.is_postgres else "0"),
+                "privacy_accepted": ("BOOLEAN" if self.is_postgres else "INTEGER") + " NOT NULL DEFAULT " + ("FALSE" if self.is_postgres else "0"),
+                "plan": "TEXT NOT NULL DEFAULT 'free'",
+            }.items():
+                if column not in columns:
+                    self._execute(connection, f"ALTER TABLE users ADD COLUMN {column} {definition}")
+            self._refresh_columns(connection)
+
+    def _refresh_columns(self, connection) -> None:
+        if self.is_postgres:
+            query = "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name IN ('users', 'invoices', 'sessions')"
+            rows = self._execute(connection, query)
+            grouped = {}
+            for row in rows:
+                grouped.setdefault(row["table_name"], set()).add(row["column_name"])
+            self.user_columns = grouped.get("users", set())
+            self.invoice_columns = grouped.get("invoices", set())
+            self.session_columns = grouped.get("sessions", set())
+        else:
+            self.user_columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(users)")}
+            self.invoice_columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(invoices)")}
+            self.session_columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(sessions)")}
 
     def _encrypt(self, value: str) -> str:
         return self._fernet.encrypt(value.encode()).decode()
 
     def _decrypt(self, value: str) -> str:
+        if not value:
+            return ""
         return self._fernet.decrypt(value.encode()).decode()
 
     def _load(self) -> None:
         with self._connect() as connection:
             for row in self._execute(connection, "SELECT * FROM users"):
-                values = dict(row)
+                row_keys = row.keys()
+                values = {name: row[name] for name in USER_FIELDS if name in row_keys}
+                if "password" not in values:
+                    values["password"] = row["password_hash"] if "password_hash" in row_keys else ""
                 for name in PRIVATE_FIELDS:
-                    values[name] = self._decrypt(values[name])
+                    values[name] = self._decrypt(values.get(name, ""))
                 values["email_verified"] = bool(values["email_verified"])
                 values["verification_expires_at"] = _as_datetime(values["verification_expires_at"])
                 values["terms_accepted"] = bool(values["terms_accepted"])
                 values["privacy_accepted"] = bool(values["privacy_accepted"])
                 self.users[row["id"]] = User(**values)
             for row in self._execute(connection, "SELECT * FROM invoices"):
-                values = dict(row)
+                row_keys = row.keys()
+                values = {name: row[name] for name in INVOICE_FIELDS if name in row_keys}
                 values["due_date"] = _as_datetime(values["due_date"])
                 values["last_ping_at"] = _as_datetime(values["last_ping_at"])
                 self.invoices[row["id"]] = Invoice(**values)
@@ -173,8 +225,9 @@ class Repository:
         if self.get_user_by_email(email):
             raise ValueError("email already exists")
         user = User(self._next_id("users"), email, password, **profile)
-        columns = ["id", "email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key"]
-        values = [getattr(user, column) for column in columns]
+        password_column = "password" if "password" in self.user_columns else "password_hash"
+        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key"]
+        values = [user.password if column == "password_hash" else getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
                 values[index] = self._encrypt(values[index])
