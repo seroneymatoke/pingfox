@@ -14,7 +14,12 @@ from flask import Blueprint, current_app, has_request_context, jsonify, make_res
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .auth import current_user, require_admin, require_user
-from .mailer import send_email_change_request, send_email_change_verification, send_invoice_email, send_verification_email
+from .mailer import (
+    send_email_change_request,
+    send_email_change_verification,
+    send_invoice_email,
+    send_verification_email,
+)
 from .models import Invoice, repository
 
 api = Blueprint("api", __name__)
@@ -88,7 +93,7 @@ def user_json(user) -> dict:
         "subscription_status": user.subscription_status,
         "subscription_cancel_at": user.subscription_cancel_at.isoformat() if user.subscription_cancel_at else None,
         "invoices_created": user.invoices_created,
-        "onboarding_complete": bool(user.full_name and user.residence_address and user.country),
+        "onboarding_complete": bool(user.full_name and user.phone and user.residence_address and user.country),
         "email_verified": user.email_verified,
         "account_status": user.account_status,
         "is_admin": user.email.lower() in {email.strip().lower() for email in current_app.config.get("ADMIN_EMAILS", "").split(",") if email.strip()},
@@ -179,9 +184,9 @@ def resend_verification():
 @require_user
 def onboarding():
     body = request.get_json(silent=True) or {}
-    required_fields = ("full_name", "residence_address", "country")
+    required_fields = ("full_name", "phone", "residence_address", "country")
     if any(not str(body.get(field, "")).strip() for field in required_fields):
-        return jsonify(error="Please complete your name, address, and country."), 400
+        return jsonify(error="Please complete your name, phone number, address, and country."), 400
     user = current_user()
     user.full_name = str(body["full_name"]).strip()
     user.phone = str(body.get("phone", "")).strip()

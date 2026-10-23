@@ -85,6 +85,7 @@ def test_onboarding_stores_profile_without_exposing_tax_id(client):
         "/api/onboarding",
         json={
             "full_name": "Profile Owner",
+            "phone": "+1 415 555 0100",
             "tax_id": "TAX-SECRET",
             "residence_address": "1 Main Street",
             "country": "US",
