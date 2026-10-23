@@ -21,9 +21,14 @@ case "$environment" in
 esac
 
 if [[ ! -f "$env_file" ]]; then
+  if [[ "$environment" == "local" && -f "$project_root/settings.env" ]]; then
+    env_file="$project_root/settings.env"
+    echo "Using legacy settings.env; migrate it to settings.local.env when convenient." >&2
+  else
   echo "Missing $env_file" >&2
   echo "Copy $template to $env_file and fill in its values first." >&2
   return 1 2>/dev/null || exit 1
+  fi
 fi
 
 # shellcheck disable=SC1090
