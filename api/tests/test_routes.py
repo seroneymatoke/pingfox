@@ -230,9 +230,8 @@ def test_settings_update_profile_password_and_unique_email(client):
     assert password.status_code == 200
     assert client.post("/api/login", json={"email": "owner@example.com", "password": "newpassword123"}).status_code == 200
 
-    repository.create_user("taken@example.com", "hash", email_verified=True)
-    duplicate = client.put("/api/settings/email", json={"email": "taken@example.com", "current_password": "newpassword123"})
-    assert duplicate.status_code == 409
+    locked = client.put("/api/settings/email", json={"email": "new@example.com", "current_password": "newpassword123"})
+    assert locked.status_code == 410
 
 
 def test_paid_subscription_can_be_cancelled_at_period_end(client):
@@ -282,3 +281,20 @@ def test_admin_routes_reject_non_admin_users(client):
 
     response = client.get("/api/admin/overview")
     assert response.status_code == 403
+
+
+def test_admin_email_change_requires_both_email_confirmations(client):
+    signup_and_login(client)
+    client.application.config["ADMIN_EMAILS"] = "owner@example.com"
+    requested = client.post("/api/admin/accounts/1/email-change", json={"new_email": "new-owner@example.com"})
+    assert requested.status_code == 202
+    current_token = client.application.extensions["pingfox_test_emails"][-1]["token"]
+
+    current_confirmation = client.get(f"/api/email-change/confirm-current?token={current_token}")
+    assert current_confirmation.status_code == 302
+    new_token = client.application.extensions["pingfox_test_emails"][-1]["token"]
+    assert repository.get_user(1).email == "owner@example.com"
+
+    new_confirmation = client.get(f"/api/email-change/confirm-new?token={new_token}")
+    assert new_confirmation.status_code == 302
+    assert repository.get_user(1).email == "new-owner@example.com"

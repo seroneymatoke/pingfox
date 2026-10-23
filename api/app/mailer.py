@@ -116,3 +116,50 @@ def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: s
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as smtp:
         smtp.login(sender, password)
         smtp.send_message(message)
+
+
+def send_email_change_request(recipient: str, confirmation_url: str, new_email: str) -> None:
+    """Ask the current address to approve an administrator-requested email change."""
+    if current_app.testing:
+        current_app.extensions.setdefault("pingfox_test_emails", []).append({"to": recipient, "kind": "email_change_current", "token": confirmation_url.rsplit("token=", 1)[-1]})
+        return
+    sender = os.environ.get("PINGFOX_GMAIL_ADDRESS", "")
+    password = os.environ.get("PINGFOX_GMAIL_PASSWORD", "")
+    if not sender or not password:
+        raise RuntimeError("Email delivery is not configured")
+    safe_url = escape(confirmation_url, quote=True)
+    safe_new_email = escape(new_email)
+    message = EmailMessage()
+    message["Subject"] = "Confirm your PingFox email change"
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(f"An administrator requested that your PingFox account email change to {new_email}. Confirm this request here:\n\n{confirmation_url}\n\nIf you did not request this, contact PingFox support immediately.")
+    message.add_alternative(f"""
+      <!doctype html><html><body style="margin:0;background:#0a0b0f;color:#f3f1ec;font-family:Arial,sans-serif"><div style="padding:40px 20px"><div style="max-width:520px;margin:0 auto;padding:36px;background:#15161d;border:1px solid #2d2e38;border-radius:16px"><div style="font-family:Georgia,serif;font-size:24px;font-weight:bold">🦊 PingFox</div><div style="margin-top:42px;color:#ff6b3d;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Security confirmation</div><h1 style="font-family:Georgia,serif;font-size:34px">Confirm email change.</h1><p style="color:#9b9ca6;line-height:1.7">An administrator requested that your PingFox account email change to <strong style="color:#f3f1ec">{safe_new_email}</strong>.</p><p><a href="{safe_url}" style="display:inline-block;padding:14px 22px;background:#ff6b3d;color:#17100d;border-radius:9px;font-weight:bold;text-decoration:none">Confirm this request →</a></p><p style="color:#777985;font-size:12px;line-height:1.6">If you did not expect this, do not continue and contact PingFox support. This link expires in 30 minutes.</p></div></div></body></html>
+    """, subtype="html")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as smtp:
+        smtp.login(sender, password)
+        smtp.send_message(message)
+
+
+def send_email_change_verification(recipient: str, confirmation_url: str) -> None:
+    """Verify ownership of the new address before completing an email change."""
+    if current_app.testing:
+        current_app.extensions.setdefault("pingfox_test_emails", []).append({"to": recipient, "kind": "email_change_new", "token": confirmation_url.rsplit("token=", 1)[-1]})
+        return
+    sender = os.environ.get("PINGFOX_GMAIL_ADDRESS", "")
+    password = os.environ.get("PINGFOX_GMAIL_PASSWORD", "")
+    if not sender or not password:
+        raise RuntimeError("Email delivery is not configured")
+    safe_url = escape(confirmation_url, quote=True)
+    message = EmailMessage()
+    message["Subject"] = "Verify your new PingFox email"
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(f"Finish changing your PingFox account email by confirming this address:\n\n{confirmation_url}\n\nIf you did not request this change, contact PingFox support immediately.")
+    message.add_alternative(f"""
+      <!doctype html><html><body style="margin:0;background:#0a0b0f;color:#f3f1ec;font-family:Arial,sans-serif"><div style="padding:40px 20px"><div style="max-width:520px;margin:0 auto;padding:36px;background:#15161d;border:1px solid #2d2e38;border-radius:16px"><div style="font-family:Georgia,serif;font-size:24px;font-weight:bold">🦊 PingFox</div><div style="margin-top:42px;color:#ff6b3d;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Verify new address</div><h1 style="font-family:Georgia,serif;font-size:34px">One last confirmation.</h1><p style="color:#9b9ca6;line-height:1.7">Confirm that this inbox belongs to the PingFox account owner.</p><p><a href="{safe_url}" style="display:inline-block;padding:14px 22px;background:#ff6b3d;color:#17100d;border-radius:9px;font-weight:bold;text-decoration:none">Verify new email →</a></p><p style="color:#777985;font-size:12px;line-height:1.6">This link expires in 30 minutes and can only be used once.</p></div></div></body></html>
+    """, subtype="html")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as smtp:
+        smtp.login(sender, password)
+        smtp.send_message(message)

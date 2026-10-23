@@ -103,6 +103,19 @@ class SubscriptionEvent:
     created_at: datetime
 
 
+@dataclass
+class EmailChangeRequest:
+    id: int
+    user_id: int
+    current_email: str
+    new_email: str
+    current_token_hash: str
+    new_token_hash: str = ""
+    expires_at: datetime | None = None
+    current_confirmed: bool = False
+    status: str = "pending"
+
+
 class Repository:
     """SQLite-backed repository; sensitive profile columns are encrypted at rest."""
 
@@ -117,6 +130,7 @@ class Repository:
         self.invoices: dict[int, Invoice] = {}
         self.sessions: dict[str, int] = {}
         self.subscription_events: dict[int, SubscriptionEvent] = {}
+        self.email_change_requests: dict[int, EmailChangeRequest] = {}
         self.user_columns: set[str] = set()
         self.invoice_columns: set[str] = set()
         self.session_columns: set[str] = set()
@@ -160,6 +174,12 @@ class Repository:
                 CREATE TABLE IF NOT EXISTS subscription_events (
                     id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, event_type TEXT NOT NULL,
                     plan TEXT NOT NULL, created_at {time_type} NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS email_change_requests (
+                    id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, current_email TEXT NOT NULL,
+                    new_email TEXT NOT NULL, current_token_hash TEXT NOT NULL, new_token_hash TEXT NOT NULL DEFAULT '',
+                    expires_at {time_type} NOT NULL, current_confirmed {bool_type} NOT NULL DEFAULT {false_value},
+                    status TEXT NOT NULL DEFAULT 'pending'
                 );
             """.format(
                 id_type="SERIAL" if self.is_postgres else "INTEGER",
@@ -269,6 +289,8 @@ class Repository:
                 self.sessions[row["token"]] = row["user_id"]
             for row in self._execute(connection, "SELECT id, user_id, event_type, plan, created_at FROM subscription_events"):
                 self.subscription_events[row["id"]] = SubscriptionEvent(row["id"], row["user_id"], row["event_type"], row["plan"], _as_datetime(row["created_at"]))
+            for row in self._execute(connection, "SELECT id, user_id, current_email, new_email, current_token_hash, new_token_hash, expires_at, current_confirmed, status FROM email_change_requests"):
+                self.email_change_requests[row["id"]] = EmailChangeRequest(row["id"], row["user_id"], row["current_email"], row["new_email"], row["current_token_hash"], row["new_token_hash"], _as_datetime(row["expires_at"]), bool(row["current_confirmed"]), row["status"])
         for user in self.users.values():
             user.invoices_created = max(user.invoices_created, sum(invoice.user_id == user.id for invoice in self.invoices.values()))
 
@@ -343,6 +365,28 @@ class Repository:
     def subscription_events_for(self, user_id: int) -> list[SubscriptionEvent]:
         return sorted((event for event in self.subscription_events.values() if event.user_id == user_id), key=lambda event: event.created_at, reverse=True)
 
+    def create_email_change_request(self, user_id: int, current_email: str, new_email: str, current_token: str, expires_at: datetime) -> EmailChangeRequest:
+        request = EmailChangeRequest(self._next_id("email_change_requests"), user_id, current_email, new_email, hashlib.sha256(current_token.encode()).hexdigest(), expires_at=expires_at)
+        with self._connect() as connection:
+            self._execute(connection, "INSERT INTO email_change_requests (id,user_id,current_email,new_email,current_token_hash,new_token_hash,expires_at,current_confirmed,status) VALUES (?,?,?,?,?,?,?,?,?)", (request.id, request.user_id, request.current_email, request.new_email, request.current_token_hash, request.new_token_hash, request.expires_at.isoformat(), request.current_confirmed, request.status))
+        self.email_change_requests[request.id] = request
+        return request
+
+    def get_email_change_by_current_hash(self, token_hash: str) -> EmailChangeRequest | None:
+        return next((item for item in self.email_change_requests.values() if item.current_token_hash == token_hash), None)
+
+    def get_email_change_by_new_hash(self, token_hash: str) -> EmailChangeRequest | None:
+        return next((item for item in self.email_change_requests.values() if item.new_token_hash == token_hash), None)
+
+    def save_email_change_request(self, item: EmailChangeRequest) -> None:
+        with self._connect() as connection:
+            self._execute(connection, "UPDATE email_change_requests SET new_token_hash = ?, current_confirmed = ?, status = ? WHERE id = ?", (item.new_token_hash, item.current_confirmed, item.status, item.id))
+
+    def delete_sessions_for_user(self, user_id: int) -> None:
+        with self._connect() as connection:
+            self._execute(connection, "DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        self.sessions = {token: session_user_id for token, session_user_id in self.sessions.items() if session_user_id != user_id}
+
     def delete_session(self, token: str) -> None:
         with self._connect() as connection:
             self._execute(connection, "DELETE FROM sessions WHERE token = ?", (token,))
@@ -396,12 +440,14 @@ class Repository:
                 self._execute(connection, "DELETE FROM invoices")
                 self._execute(connection, "DELETE FROM users")
                 self._execute(connection, "DELETE FROM subscription_events")
+                self._execute(connection, "DELETE FROM email_change_requests")
             else:
-                connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users; DELETE FROM subscription_events;")
+                connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users; DELETE FROM subscription_events; DELETE FROM email_change_requests;")
         self.users.clear()
         self.invoices.clear()
         self.sessions.clear()
         self.subscription_events.clear()
+        self.email_change_requests.clear()
 
 
 repository = Repository()

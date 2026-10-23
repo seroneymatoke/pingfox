@@ -12,4 +12,5 @@ class Config:
     APP_URL = os.environ.get("PINGFOX_APP_URL", "")
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
     ADMIN_EMAILS = os.environ.get("PINGFOX_ADMIN_EMAILS", "")
+    EMAIL_CHANGE_TOKEN_TTL_MINUTES = 30
     VERIFICATION_TOKEN_TTL_HOURS = 24

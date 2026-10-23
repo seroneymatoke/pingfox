@@ -1,12 +1,10 @@
 """HTTP routes matching the first behavior-compatible Go API slice."""
 
-from datetime import datetime
-from functools import wraps
-from datetime import timedelta, timezone
 import hashlib
 import json
 import os
 import re
+from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -16,7 +14,7 @@ from flask import Blueprint, current_app, has_request_context, jsonify, make_res
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .auth import current_user, require_admin, require_user
-from .mailer import send_invoice_email, send_verification_email
+from .mailer import send_email_change_request, send_email_change_verification, send_invoice_email, send_verification_email
 from .models import Invoice, repository
 
 api = Blueprint("api", __name__)
@@ -108,7 +106,7 @@ def signup():
         return jsonify(error="You must accept the Terms and Privacy Policy to create an account."), 400
     try:
         verification_token = token_urlsafe(32)
-        verification_expires_at = datetime.now(timezone.utc) + timedelta(hours=current_app.config["VERIFICATION_TOKEN_TTL_HOURS"])
+        verification_expires_at = datetime.now(UTC) + timedelta(hours=current_app.config["VERIFICATION_TOKEN_TTL_HOURS"])
         user = repository.create_user(
             email,
             generate_password_hash(password),
@@ -143,7 +141,7 @@ def signup():
 def verify_email():
     token = request.args.get("token", "")
     user = repository.get_user_by_verification_hash(hashlib.sha256(token.encode()).hexdigest())
-    if user is None or user.verification_expires_at is None or user.verification_expires_at < datetime.now(timezone.utc):
+    if user is None or user.verification_expires_at is None or user.verification_expires_at < datetime.now(UTC):
         return redirect(f"{public_app_url()}/?verified=invalid#login")
     user.email_verified = True
     user.verification_token_hash = ""
@@ -170,7 +168,7 @@ def resend_verification():
         return jsonify(message="If that account needs verification, an email has been sent."), 202
     verification_token = token_urlsafe(32)
     user.verification_token_hash = hashlib.sha256(verification_token.encode()).hexdigest()
-    user.verification_expires_at = datetime.now(timezone.utc) + timedelta(hours=current_app.config["VERIFICATION_TOKEN_TTL_HOURS"])
+    user.verification_expires_at = datetime.now(UTC) + timedelta(hours=current_app.config["VERIFICATION_TOKEN_TTL_HOURS"])
     repository.save_user(user)
     verification_url = f"{public_app_url()}/api/verify-email?token={quote(verification_token)}"
     send_verification_email(user.email, verification_url)
@@ -243,19 +241,7 @@ def update_password():
 @api.put("/settings/email")
 @require_user
 def update_email():
-    body = request.get_json(silent=True) or {}
-    user = current_user()
-    email = str(body.get("email", "")).strip()
-    if not EMAIL_PATTERN.fullmatch(email):
-        return jsonify(error="Enter a valid email address."), 400
-    if not check_password_hash(user.password, str(body.get("current_password", ""))):
-        return jsonify(error="Current password is incorrect."), 400
-    existing = repository.get_user_by_email(email)
-    if existing is not None and existing.id != user.id:
-        return jsonify(error="That email address is already in use."), 409
-    user.email = email
-    repository.save_user(user)
-    return jsonify(user_json(user))
+    return jsonify(error="Email changes must be initiated by an administrator and confirmed by email."), 410
 
 
 @api.get("/subscription")
@@ -328,6 +314,75 @@ def update_account_status(user_id: int):
     return jsonify(account=admin_account_json(user))
 
 
+@api.post("/admin/accounts/<int:user_id>/email-change")
+@require_admin
+def request_account_email_change(user_id: int):
+    user = repository.get_user(user_id)
+    if user is None:
+        return jsonify(error="account not found"), 404
+    new_email = str((request.get_json(silent=True) or {}).get("new_email", "")).strip().lower()
+    if not EMAIL_PATTERN.fullmatch(new_email):
+        return jsonify(error="Enter a valid new email address."), 400
+    if new_email == user.email.lower():
+        return jsonify(error="The new email must be different from the current email."), 400
+    if repository.get_user_by_email(new_email) is not None:
+        return jsonify(error="That email address is already in use."), 409
+    for item in repository.email_change_requests.values():
+        if item.user_id == user.id and item.status == "pending":
+            item.status = "superseded"
+            repository.save_email_change_request(item)
+    current_token = token_urlsafe(32)
+    expires_at = datetime.now(UTC) + timedelta(minutes=current_app.config["EMAIL_CHANGE_TOKEN_TTL_MINUTES"])
+    item = repository.create_email_change_request(user.id, user.email, new_email, current_token, expires_at)
+    confirmation_url = f"{public_app_url()}/api/email-change/confirm-current?token={quote(current_token)}"
+    try:
+        send_email_change_request(user.email, confirmation_url, new_email)
+    except RuntimeError as error:
+        return jsonify(error="email_delivery_not_configured", message=str(error)), 503
+    return jsonify(message="A confirmation link has been sent to the current email address.", request_id=item.id), 202
+
+
+@api.get("/email-change/confirm-current")
+def confirm_current_email_change():
+    item = repository.get_email_change_by_current_hash(hashlib.sha256(request.args.get("token", "").encode()).hexdigest())
+    if item is None or item.status != "pending" or item.expires_at is None or item.expires_at < datetime.now(UTC):
+        return redirect(f"{public_app_url()}/?emailChange=invalid#login")
+    user = repository.get_user(item.user_id)
+    if user is None or user.email.lower() != item.current_email.lower():
+        return redirect(f"{public_app_url()}/?emailChange=invalid#login")
+    new_token = token_urlsafe(32)
+    item.current_confirmed = True
+    item.new_token_hash = hashlib.sha256(new_token.encode()).hexdigest()
+    repository.save_email_change_request(item)
+    new_confirmation_url = f"{public_app_url()}/api/email-change/confirm-new?token={quote(new_token)}"
+    try:
+        send_email_change_verification(item.new_email, new_confirmation_url)
+    except RuntimeError as error:
+        current_app.logger.error("Could not send new email verification: %s", error)
+        return redirect(f"{public_app_url()}/?emailChange=delivery-error#login")
+    return redirect(f"{public_app_url()}/?emailChange=new-address-sent#login")
+
+
+@api.get("/email-change/confirm-new")
+def confirm_new_email_change():
+    item = repository.get_email_change_by_new_hash(hashlib.sha256(request.args.get("token", "").encode()).hexdigest())
+    if item is None or item.status != "pending" or not item.current_confirmed or item.expires_at is None or item.expires_at < datetime.now(UTC):
+        return redirect(f"{public_app_url()}/?emailChange=invalid#login")
+    if repository.get_user_by_email(item.new_email) is not None:
+        item.status = "failed_duplicate"
+        repository.save_email_change_request(item)
+        return redirect(f"{public_app_url()}/?emailChange=duplicate#login")
+    user = repository.get_user(item.user_id)
+    if user is None:
+        return redirect(f"{public_app_url()}/?emailChange=invalid#login")
+    user.email = item.new_email
+    repository.save_user(user)
+    item.status = "completed"
+    repository.save_email_change_request(item)
+    repository.delete_sessions_for_user(user.id)
+    return redirect(f"{public_app_url()}/?emailChange=success#login")
+
+
 @api.delete("/admin/accounts/<int:user_id>")
 @require_admin
 def delete_account(user_id: int):
@@ -359,7 +414,7 @@ def cancel_subscription():
     if user.plan == "free":
         return jsonify(error="The Free plan does not have an active subscription."), 400
     user.subscription_status = "cancel_at_period_end"
-    user.subscription_cancel_at = datetime.now(timezone.utc)
+    user.subscription_cancel_at = datetime.now(UTC)
     repository.save_user(user)
     repository.add_subscription_event(user.id, "cancellation_scheduled", user.plan)
     return jsonify(plan=user.plan, status=user.subscription_status, cancel_at=user.subscription_cancel_at.isoformat())
@@ -441,7 +496,7 @@ def create_invoice():
 
     body = request.get_json(silent=True) or {}
     try:
-        due_date = datetime.fromisoformat(str(body["due_date"]).replace("Z", "+00:00"))
+        due_date = datetime.fromisoformat(str(body["due_date"]))
         amount_cents = int(body["amount_cents"])
     except (KeyError, TypeError, ValueError):
         return jsonify(error="invalid due_date or amount_cents"), 400

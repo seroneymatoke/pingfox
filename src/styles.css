@@ -108,6 +108,7 @@ input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
 .settings-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 4px; }
 .settings-card h2 { margin: 5px 0 0; font-family: Fraunces, serif; font-size: 24px; }
 .settings-description { max-width: 520px; margin: 8px 0 0; color: #8f9099; font-size: 13px; line-height: 1.5; }
+.settings-help { margin: -4px 0 0; color: #777985; font-size: 12px; line-height: 1.6; }
 .settings-badge { padding: 6px 9px; color: #a6edbd; background: #13321e; border: 1px solid #28663b; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .settings-card textarea { min-height: 96px; padding: 12px 14px; color: #f3f1ec; background: #0f1015; border: 1px solid #363743; border-radius: 9px; outline: none; resize: vertical; }
 .settings-card textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
