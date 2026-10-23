@@ -25,6 +25,17 @@ pingfox/
     templates/dashboard.html    real server-rendered page (html/template + htmx)
 ```
 
+## Environment configuration
+
+The Flask/Vite application keeps local and production settings separate:
+
+- Copy `settings.local.env.example` to `settings.local.env` for local development.
+- Copy `settings.production.env.example` to `settings.production.env` only for a controlled production-like shell.
+- Load one environment with `source ./scripts/load-env.sh local` or `source ./scripts/load-env.sh production`.
+- Add the production values to Vercel Project Settings → Environment Variables rather than committing them.
+
+Both real settings files are ignored by Git. The example files contain placeholders only. Keep database URLs, Gmail app passwords, Google client secrets, Flask secrets, and future Stripe keys out of the repository.
+
 ## Auth model (added)
 
 Two signup/login paths, both landing on the same account model:

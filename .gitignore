@@ -19,6 +19,8 @@
 .idea
 .idea/*
 settings.env
+settings.local.env
+settings.production.env
 cookies.txt
 
 # Local data
