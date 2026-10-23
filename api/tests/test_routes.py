@@ -1,10 +1,11 @@
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from api.app import create_app
 from api.app.models import repository
-from api.app.seed import seed_demo_data
+from api.app.seed import DEMO_PASSWORD, seed_demo_data
 
 
 @pytest.fixture(autouse=True)
@@ -304,6 +305,7 @@ def test_admin_email_change_requires_both_email_confirmations(client):
 
 def test_demo_seed_is_idempotent_and_keeps_accounts_free(monkeypatch):
     monkeypatch.setenv("PINGFOX_SUPER_ADMIN_EMAIL", "admin@example.com")
+    existing_demo = repository.create_user("atlas@demo.pingfox.local", generate_password_hash("old-password"))
 
     seed_demo_data()
     seed_demo_data()
@@ -313,3 +315,4 @@ def test_demo_seed_is_idempotent_and_keeps_accounts_free(monkeypatch):
     assert sum(user.plan == "free" for user in repository.users.values()) == 10
     assert len(repository.invoices) == 18
     assert repository.get_user_by_email("incomplete@demo.pingfox.local").email_verified is False
+    assert check_password_hash(existing_demo.password, DEMO_PASSWORD)

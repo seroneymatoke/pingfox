@@ -55,10 +55,12 @@ def _apply_demo_profile(user: User, business_name: str, status: str, verified: b
     user.payment_description = "Thank you for working with us."
 
 
-def _upsert_user(email: str, business_name: str, status: str, verified: bool, incomplete: bool = False) -> User:
+def _upsert_user(email: str, business_name: str, status: str, verified: bool, incomplete: bool = False, reset_demo_password: bool = False) -> User:
     user = repository.get_user_by_email(email)
     if user is None:
         user = repository.create_user(email, generate_password_hash(DEMO_PASSWORD), email_verified=verified)
+    elif reset_demo_password:
+        user.password = generate_password_hash(DEMO_PASSWORD)
     _apply_demo_profile(user, business_name, status, verified, incomplete)
     repository.save_user(user)
     return user
@@ -86,5 +88,5 @@ def seed_demo_data() -> None:
     admin.full_name = "PingFox Super Admin"
     repository.save_user(admin)
     for index, (email, business_name, status, verified) in enumerate(DEMO_ACCOUNTS, start=1):
-        user = _upsert_user(email, business_name, status, verified, incomplete=not verified)
+        user = _upsert_user(email, business_name, status, verified, incomplete=not verified, reset_demo_password=True)
         _seed_invoices(user, index)
