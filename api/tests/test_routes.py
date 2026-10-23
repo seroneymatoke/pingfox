@@ -158,6 +158,18 @@ def test_free_plan_limit_survives_invoice_deletion(client):
     assert fourth.get_json()["upgrade_url"] == "https://pingfox.com/upgrade"
 
 
+def test_invoice_settings_are_persisted_and_snapshotted(client):
+    signup_and_login(client)
+    settings = client.put("/api/settings/invoice", json={"business_logo": "data:image/svg+xml;base64,logo", "invoice_terms": "Payment due on receipt.", "payment_terms": "Due now", "cancellation_description": "Stop reminders anytime.", "payment_description": "Paid — thank you."})
+    assert settings.status_code == 200
+    first = client.post("/api/invoices", json={"client_name": "Client", "client_email": "billing@example.com", "amount_cents": 1000, "due_date": "2026-01-08"})
+    assert first.get_json()["invoice_terms"] == "Payment due on receipt."
+    client.put("/api/settings/invoice", json={"invoice_terms": "Updated terms."})
+    second = client.post("/api/invoices", json={"client_name": "Client 2", "client_email": "billing2@example.com", "amount_cents": 1000, "due_date": "2026-01-08"})
+    assert second.get_json()["invoice_terms"] == "Updated terms."
+    assert repository.invoices[first.get_json()["id"]].invoice_terms == "Payment due on receipt."
+
+
 def test_ping_and_mark_paid_are_owner_scoped(client):
     signup_and_login(client)
     created = client.post(

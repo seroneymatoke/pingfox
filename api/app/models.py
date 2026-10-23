@@ -16,13 +16,13 @@ from psycopg.rows import dict_row
 PRIVATE_FIELDS = ("phone", "tax_id", "residence_address", "city", "region", "postal_code")
 USER_FIELDS = (
     "id", "email", "password", "email_verified", "verification_token_hash", "verification_expires_at",
-    "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted",
+    "full_name", *PRIVATE_FIELDS, "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "country", "timezone", "terms_accepted",
     "privacy_accepted", "plan", "api_key", "invoices_created",
     "subscription_status", "subscription_cancel_at",
 )
 INVOICE_FIELDS = (
     "id", "user_id", "client_name", "client_email", "amount_cents", "due_date", "status",
-    "pings_sent", "last_ping_at", "invoice_number",
+    "pings_sent", "last_ping_at", "invoice_number", "invoice_terms", "payment_terms",
 )
 
 
@@ -55,6 +55,11 @@ class User:
     full_name: str = ""
     phone: str = ""
     business_name: str = ""
+    business_logo: str = ""
+    invoice_terms: str = "Payment is due by the date shown on this invoice."
+    payment_terms: str = "Net 30"
+    cancellation_description: str = "You can cancel an invoice reminder before the next ping is sent."
+    payment_description: str = "Thanks for your payment."
     tax_id: str = ""
     residence_address: str = ""
     city: str = ""
@@ -83,6 +88,8 @@ class Invoice:
     pings_sent: int = 0
     last_ping_at: datetime | None = None
     invoice_number: str = ""
+    invoice_terms: str = ""
+    payment_terms: str = ""
 
 
 @dataclass
@@ -135,6 +142,8 @@ class Repository:
                     full_name TEXT NOT NULL, phone TEXT NOT NULL, business_name TEXT NOT NULL,
                     tax_id TEXT NOT NULL, residence_address TEXT NOT NULL, city TEXT NOT NULL,
                     region TEXT NOT NULL, postal_code TEXT NOT NULL, country TEXT NOT NULL,
+                    business_logo TEXT NOT NULL DEFAULT '', invoice_terms TEXT NOT NULL DEFAULT '', payment_terms TEXT NOT NULL DEFAULT 'Net 30',
+                    cancellation_description TEXT NOT NULL DEFAULT '', payment_description TEXT NOT NULL DEFAULT '',
                     timezone TEXT NOT NULL, terms_accepted {bool_type} NOT NULL, privacy_accepted {bool_type} NOT NULL,
                     plan TEXT NOT NULL, api_key TEXT UNIQUE NOT NULL, subscription_status TEXT NOT NULL DEFAULT 'active',
                     subscription_cancel_at {time_type}, invoices_created INTEGER NOT NULL DEFAULT 0
@@ -142,7 +151,8 @@ class Repository:
                 CREATE TABLE IF NOT EXISTS invoices (
                     id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
                     client_email TEXT NOT NULL, amount_cents INTEGER NOT NULL, due_date TEXT NOT NULL,
-                    status TEXT NOT NULL, pings_sent INTEGER NOT NULL, last_ping_at TEXT, invoice_number TEXT NOT NULL
+                    status TEXT NOT NULL, pings_sent INTEGER NOT NULL, last_ping_at TEXT, invoice_number TEXT NOT NULL,
+                    invoice_terms TEXT NOT NULL DEFAULT '', payment_terms TEXT NOT NULL DEFAULT ''
                 );
                 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS subscription_events (
@@ -187,9 +197,21 @@ class Repository:
                 "subscription_status": "TEXT NOT NULL DEFAULT 'active'",
                 "subscription_cancel_at": f"{'TIMESTAMPTZ' if self.is_postgres else 'TEXT'}",
                 "invoices_created": "INTEGER NOT NULL DEFAULT 0",
+                "business_logo": "TEXT NOT NULL DEFAULT ''",
+                "invoice_terms": "TEXT NOT NULL DEFAULT ''",
+                "payment_terms": "TEXT NOT NULL DEFAULT 'Net 30'",
+                "cancellation_description": "TEXT NOT NULL DEFAULT ''",
+                "payment_description": "TEXT NOT NULL DEFAULT ''",
             }.items():
                 if column not in columns:
                     self._execute(connection, f"ALTER TABLE users ADD COLUMN {column} {definition}")
+            if self.is_postgres:
+                invoice_columns = {row["column_name"] for row in self._execute(connection, "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'invoices'")}
+            else:
+                invoice_columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(invoices)")}
+            for column, definition in {"invoice_terms": "TEXT NOT NULL DEFAULT ''", "payment_terms": "TEXT NOT NULL DEFAULT ''"}.items():
+                if column not in invoice_columns:
+                    self._execute(connection, f"ALTER TABLE invoices ADD COLUMN {column} {definition}")
             self._refresh_columns(connection)
 
     def _refresh_columns(self, connection) -> None:
@@ -253,7 +275,7 @@ class Repository:
             raise ValueError("email already exists")
         user = User(self._next_id("users"), email, password, **profile)
         password_column = "password" if "password" in self.user_columns else "password_hash"
-        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key", "subscription_status", "subscription_cancel_at", "invoices_created"]
+        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key", "subscription_status", "subscription_cancel_at", "invoices_created"]
         values = [user.password if column == "password_hash" else getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
@@ -278,7 +300,7 @@ class Repository:
         return self.users.get(user_id)
 
     def save_user(self, user: User) -> None:
-        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at", "invoices_created"]
+        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at", "invoices_created"]
         values = [getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
@@ -328,7 +350,7 @@ class Repository:
     def create_invoice(self, invoice: Invoice) -> Invoice:
         invoice.id = self._next_id("invoices")
         with self._connect() as connection:
-            self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number))
+            self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number,invoice_terms,payment_terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number, invoice.invoice_terms, invoice.payment_terms))
         self.invoices[invoice.id] = invoice
         user = self.get_user(invoice.user_id)
         if user is not None:

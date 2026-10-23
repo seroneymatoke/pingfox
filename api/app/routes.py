@@ -48,6 +48,8 @@ def invoice_json(invoice: Invoice) -> dict:
         "pings_sent": invoice.pings_sent,
         "last_ping_at": invoice.last_ping_at.isoformat() if invoice.last_ping_at else None,
         "invoice_number": invoice.invoice_number,
+        "invoice_terms": invoice.invoice_terms,
+        "payment_terms": invoice.payment_terms,
     }
 
 
@@ -59,6 +61,11 @@ def user_json(user) -> dict:
         "full_name": user.full_name,
         "phone": user.phone,
         "business_name": user.business_name,
+        "business_logo": user.business_logo,
+        "invoice_terms": user.invoice_terms,
+        "payment_terms": user.payment_terms,
+        "cancellation_description": user.cancellation_description,
+        "payment_description": user.payment_description,
         "residence_address": user.residence_address,
         "city": user.city,
         "region": user.region,
@@ -184,7 +191,18 @@ def update_profile():
     required_fields = ("full_name", "residence_address", "country")
     if any(not str(body.get(field, "")).strip() for field in required_fields):
         return jsonify(error="Please complete your name, address, and country."), 400
-    for field in ("full_name", "phone", "business_name", "tax_id", "residence_address", "city", "region", "postal_code", "country", "timezone"):
+    for field in ("full_name", "phone", "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "tax_id", "residence_address", "city", "region", "postal_code", "country", "timezone"):
+        setattr(user, field, str(body.get(field, getattr(user, field))).strip())
+    repository.save_user(user)
+    return jsonify(user_json(user))
+
+
+@api.put("/settings/invoice")
+@require_user
+def update_invoice_settings():
+    body = request.get_json(silent=True) or {}
+    user = current_user()
+    for field in ("business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description"):
         setattr(user, field, str(body.get(field, getattr(user, field))).strip())
     repository.save_user(user)
     return jsonify(user_json(user))
@@ -354,6 +372,8 @@ def create_invoice():
         amount_cents=amount_cents,
         due_date=due_date,
         invoice_number=str(body.get("invoice_number", "")),
+        invoice_terms=user.invoice_terms,
+        payment_terms=user.payment_terms,
     ))
     return jsonify(invoice_json(invoice)), 201
 
