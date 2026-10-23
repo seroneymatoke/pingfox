@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { Landing } from './components/Landing';
-import { Login, Onboarding, Register, VerifyEmail } from './components/AuthScreens';
+import { Login, Register, VerifyEmail } from './components/AuthScreens';
+import { Onboarding } from './components/Onboarding';
 
 function initialView() {
   if (window.location.hash === '#login') return 'login';
