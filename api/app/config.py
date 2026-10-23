@@ -11,6 +11,9 @@ class Config:
     # Keep this optional so deployments can derive the public URL from Vercel.
     APP_URL = os.environ.get("PINGFOX_APP_URL", "")
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_OAUTH_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "")
     ADMIN_EMAILS = os.environ.get("PINGFOX_ADMIN_EMAILS", "")
     EMAIL_CHANGE_TOKEN_TTL_MINUTES = 30
     SEED_DEMO_DATA = os.environ.get("PINGFOX_SEED_DEMO_DATA", "false").lower() == "true"

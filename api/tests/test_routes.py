@@ -150,6 +150,21 @@ def test_free_plan_limit_returns_payment_required(client):
     assert response.get_json()["error"] == "free_tier_limit_reached"
 
 
+def test_google_oauth_requires_configuration(client):
+    response = client.get("/api/oauth/google/start")
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "Google sign-in is not configured."
+
+
+def test_google_oauth_callback_rejects_invalid_state(client):
+    client.application.config.update(GOOGLE_CLIENT_ID="client-id", GOOGLE_CLIENT_SECRET="client-secret")
+    start = client.get("/api/oauth/google/start")
+    assert start.status_code == 302
+    callback = client.get("/api/oauth/google/callback?code=unused&state=wrong-state")
+    assert callback.status_code == 302
+    assert "oauth_error=" in callback.headers["Location"]
+
+
 def test_free_plan_limit_survives_invoice_deletion(client):
     signup_and_login(client)
     payload = {"client_name": "Client", "client_email": "billing@example.com", "amount_cents": 1000, "due_date": "2026-01-08"}

@@ -5,7 +5,11 @@ export function Login({ onLogin, onRegister, onBackToLanding }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [oauthMessage, setOauthMessage] = useState('');
+  const [oauthMessage, setOauthMessage] = useState(() => new URLSearchParams(window.location.search).get('oauth_error') || '');
+
+  function startGoogleLogin() {
+    window.location.href = '/api/oauth/google/start?mode=login';
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -30,7 +34,7 @@ export function Login({ onLogin, onRegister, onBackToLanding }) {
       <button className="primary-button" type="submit">Log in <span aria-hidden="true">→</span></button>
     </form>
     <div className="auth-divider"><span>or continue with</span></div>
-    <div className="oauth-actions"><OAuthButton provider="Google" onClick={() => setOauthMessage('Google sign-in will be available soon.')} /><OAuthButton provider="Facebook" onClick={() => setOauthMessage('Facebook sign-in will be available soon.')} /><OAuthButton provider="Microsoft" onClick={() => setOauthMessage('Microsoft sign-in will be available soon.')} /></div>
+    <div className="oauth-actions"><OAuthButton provider="Google" onClick={startGoogleLogin} /><OAuthButton provider="Facebook" onClick={() => setOauthMessage('Facebook sign-in will be available soon.')} /><OAuthButton provider="Microsoft" onClick={() => setOauthMessage('Microsoft sign-in will be available soon.')} /></div>
     <p className="auth-footer">New to PingFox? <button type="button" onClick={onRegister}>Start free</button></p>
     <button type="button" className="back-to-landing" onClick={onBackToLanding}>← Back to landing page</button>
   </section></main>;
@@ -43,6 +47,14 @@ export function Register({ onRegister, onBackToLanding }) {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [error, setError] = useState('');
+
+  function startGoogleRegistration() {
+    if (!termsAccepted || !privacyAccepted) {
+      setError('Agree to the Terms of Service and Privacy Policy before continuing with Google.');
+      return;
+    }
+    window.location.href = '/api/oauth/google/start?mode=register';
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -75,7 +87,7 @@ export function Register({ onRegister, onBackToLanding }) {
       <button className="primary-button" type="submit">Create account <span aria-hidden="true">→</span></button>
     </form>
     <div className="auth-divider"><span>or continue with</span></div>
-    <div className="oauth-actions"><OAuthButton provider="Google" onClick={() => setError('Google sign-in will be available soon.')} /><OAuthButton provider="Facebook" onClick={() => setError('Facebook sign-in will be available soon.')} /><OAuthButton provider="Microsoft" onClick={() => setError('Microsoft sign-in will be available soon.')} /></div>
+    <div className="oauth-actions"><OAuthButton provider="Google" onClick={startGoogleRegistration} /><OAuthButton provider="Facebook" onClick={() => setError('Facebook sign-in will be available soon.')} /><OAuthButton provider="Microsoft" onClick={() => setError('Microsoft sign-in will be available soon.')} /></div>
     <p className="auth-footer">Already have an account? <button type="button" onClick={() => { window.location.hash = 'login'; }}>Log in</button></p>
     <button type="button" className="back-to-landing" onClick={onBackToLanding}>← Back to landing page</button>
   </section></main>;

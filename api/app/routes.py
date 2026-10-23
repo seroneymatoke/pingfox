@@ -10,7 +10,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, current_app, has_request_context, jsonify, make_response, redirect, request
+from flask import (
+    Blueprint,
+    current_app,
+    has_request_context,
+    jsonify,
+    make_response,
+    redirect,
+    request,
+    session,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .auth import current_user, require_admin, require_user
@@ -439,6 +448,90 @@ def login():
     token = repository.create_session(user.id)
     response = jsonify(**user_json(user))
     response.set_cookie("pingfox_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Lax", path="/")
+    return response
+
+
+def _google_redirect_uri() -> str:
+    configured_uri = current_app.config.get("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    return configured_uri or f"{public_app_url()}/api/oauth/google/callback"
+
+
+@api.get("/oauth/google/start")
+def google_oauth_start():
+    client_id = current_app.config.get("GOOGLE_CLIENT_ID", "").strip()
+    client_secret = current_app.config.get("GOOGLE_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        return jsonify(error="Google sign-in is not configured."), 503
+    mode = request.args.get("mode", "login")
+    if mode not in {"login", "register"}:
+        mode = "login"
+    state = token_urlsafe(32)
+    session["google_oauth_state"] = state
+    session["google_oauth_mode"] = mode
+    query = urlencode({
+        "client_id": client_id,
+        "redirect_uri": _google_redirect_uri(),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
+    })
+    return redirect(f"https://accounts.google.com/o/oauth2/v2/auth?{query}")
+
+
+def _google_error_redirect(message: str):
+    return redirect(f"{public_app_url()}/?oauth_error={quote(message)}#login")
+
+
+def _google_request(url: str, *, method: str = "GET", body: bytes | None = None, headers: dict[str, str] | None = None) -> dict:
+    request_headers = {"Accept": "application/json", **(headers or {})}
+    google_request = Request(url, data=body, headers=request_headers, method=method)
+    with urlopen(google_request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+@api.get("/oauth/google/callback")
+def google_oauth_callback():
+    expected_state = session.pop("google_oauth_state", "")
+    mode = session.pop("google_oauth_mode", "login")
+    if not expected_state or not request.args.get("state") or request.args.get("state") != expected_state:
+        return _google_error_redirect("Google sign-in could not be verified. Please try again.")
+    if request.args.get("error"):
+        return _google_error_redirect("Google sign-in was cancelled.")
+    code = request.args.get("code", "")
+    if not code:
+        return _google_error_redirect("Google did not return an authorization code.")
+    try:
+        token_body = urlencode({
+            "code": code,
+            "client_id": current_app.config["GOOGLE_CLIENT_ID"],
+            "client_secret": current_app.config["GOOGLE_CLIENT_SECRET"],
+            "redirect_uri": _google_redirect_uri(),
+            "grant_type": "authorization_code",
+        }).encode("utf-8")
+        token_data = _google_request("https://oauth2.googleapis.com/token", method="POST", body=token_body, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        access_token = token_data.get("access_token", "")
+        if not access_token:
+            raise ValueError("Google did not return an access token")
+        profile = _google_request("https://openidconnect.googleapis.com/v1/userinfo", headers={"Authorization": f"Bearer {access_token}"})
+        email = str(profile.get("email", "")).strip().lower()
+        if not email or profile.get("email_verified") is not True:
+            return _google_error_redirect("Google did not provide a verified email address.")
+    except (HTTPError, URLError, ValueError, KeyError, json.JSONDecodeError):
+        return _google_error_redirect("Google sign-in could not be completed. Please try again.")
+
+    user = repository.get_user_by_email(email)
+    if user is None:
+        if mode != "register":
+            return _google_error_redirect("Start from Create account to register with Google.")
+        user = repository.create_user(email, generate_password_hash(token_urlsafe(32)), email_verified=True, full_name=str(profile.get("name", "")).strip(), terms_accepted=True, privacy_accepted=True)
+    else:
+        user.email_verified = True
+        repository.save_user(user)
+    token = repository.create_session(user.id)
+    response = redirect(f"{public_app_url()}/#onboarding" if not user_json(user)["onboarding_complete"] else f"{public_app_url()}/")
+    response.set_cookie("pingfox_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Lax", max_age=60 * 60 * 24 * 30)
     return response
 
 
