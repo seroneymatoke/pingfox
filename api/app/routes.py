@@ -68,6 +68,7 @@ def user_json(user) -> dict:
         "plan": user.plan,
         "subscription_status": user.subscription_status,
         "subscription_cancel_at": user.subscription_cancel_at.isoformat() if user.subscription_cancel_at else None,
+        "invoices_created": user.invoices_created,
         "onboarding_complete": bool(user.full_name and user.residence_address and user.country),
         "email_verified": user.email_verified,
     }
@@ -296,14 +297,20 @@ def dashboard():
         "due": lambda invoice: invoice.due_date,
     }.get(sort_by, lambda invoice: invoice.due_date)
     invoices.sort(key=key, reverse=order == "desc")
-    return jsonify(invoices=[invoice_json(invoice) for invoice in invoices], plan=user.plan)
+    return jsonify(
+        invoices=[invoice_json(invoice) for invoice in invoices],
+        plan=user.plan,
+        invoices_created=user.invoices_created,
+        invoice_limit=current_app.config["FREE_TIER_INVOICE_LIMIT"] if user.plan == "free" else None,
+        can_add_invoice=user.plan != "free" or user.invoices_created < current_app.config["FREE_TIER_INVOICE_LIMIT"],
+    )
 
 
 @api.post("/invoices")
 @require_user
 def create_invoice():
     user = current_user()
-    if user.plan == "free" and len(repository.invoices_for(user.id)) >= 3:
+    if user.plan == "free" and user.invoices_created >= current_app.config["FREE_TIER_INVOICE_LIMIT"]:
         return jsonify(
             error="free_tier_limit_reached",
             message="Free plan is limited to 3 invoices. Upgrade to add more.",
@@ -327,6 +334,16 @@ def create_invoice():
         invoice_number=str(body.get("invoice_number", "")),
     ))
     return jsonify(invoice_json(invoice)), 201
+
+
+@api.delete("/invoices/<int:invoice_id>")
+@require_user
+def delete_invoice(invoice_id: int):
+    invoice = repository.invoices.get(invoice_id)
+    if invoice is None or invoice.user_id != current_user().id:
+        return jsonify(error="not found"), 404
+    repository.delete_invoice(invoice_id)
+    return jsonify(status="deleted", invoices_created=current_user().invoices_created)
 
 
 @api.post("/invoices/<int:invoice_id>/ping")

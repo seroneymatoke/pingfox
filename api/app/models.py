@@ -17,7 +17,7 @@ PRIVATE_FIELDS = ("phone", "tax_id", "residence_address", "city", "region", "pos
 USER_FIELDS = (
     "id", "email", "password", "email_verified", "verification_token_hash", "verification_expires_at",
     "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted",
-    "privacy_accepted", "plan", "api_key",
+    "privacy_accepted", "plan", "api_key", "invoices_created",
     "subscription_status", "subscription_cancel_at",
 )
 INVOICE_FIELDS = (
@@ -68,6 +68,7 @@ class User:
     api_key: str = field(default_factory=lambda: token_urlsafe(32))
     subscription_status: str = "active"
     subscription_cancel_at: datetime | None = None
+    invoices_created: int = 0
 
 
 @dataclass
@@ -136,7 +137,7 @@ class Repository:
                     region TEXT NOT NULL, postal_code TEXT NOT NULL, country TEXT NOT NULL,
                     timezone TEXT NOT NULL, terms_accepted {bool_type} NOT NULL, privacy_accepted {bool_type} NOT NULL,
                     plan TEXT NOT NULL, api_key TEXT UNIQUE NOT NULL, subscription_status TEXT NOT NULL DEFAULT 'active',
-                    subscription_cancel_at {time_type}
+                    subscription_cancel_at {time_type}, invoices_created INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS invoices (
                     id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
@@ -185,6 +186,7 @@ class Repository:
                 "plan": "TEXT NOT NULL DEFAULT 'free'",
                 "subscription_status": "TEXT NOT NULL DEFAULT 'active'",
                 "subscription_cancel_at": f"{'TIMESTAMPTZ' if self.is_postgres else 'TEXT'}",
+                "invoices_created": "INTEGER NOT NULL DEFAULT 0",
             }.items():
                 if column not in columns:
                     self._execute(connection, f"ALTER TABLE users ADD COLUMN {column} {definition}")
@@ -238,6 +240,8 @@ class Repository:
                 self.sessions[row["token"]] = row["user_id"]
             for row in self._execute(connection, "SELECT id, user_id, event_type, plan, created_at FROM subscription_events"):
                 self.subscription_events[row["id"]] = SubscriptionEvent(row["id"], row["user_id"], row["event_type"], row["plan"], _as_datetime(row["created_at"]))
+        for user in self.users.values():
+            user.invoices_created = max(user.invoices_created, sum(invoice.user_id == user.id for invoice in self.invoices.values()))
 
     def _next_id(self, table: str) -> int:
         with self._connect() as connection:
@@ -249,7 +253,7 @@ class Repository:
             raise ValueError("email already exists")
         user = User(self._next_id("users"), email, password, **profile)
         password_column = "password" if "password" in self.user_columns else "password_hash"
-        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key", "subscription_status", "subscription_cancel_at"]
+        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key", "subscription_status", "subscription_cancel_at", "invoices_created"]
         values = [user.password if column == "password_hash" else getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
@@ -274,7 +278,7 @@ class Repository:
         return self.users.get(user_id)
 
     def save_user(self, user: User) -> None:
-        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at"]
+        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at", "invoices_created"]
         values = [getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
@@ -326,7 +330,16 @@ class Repository:
         with self._connect() as connection:
             self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number))
         self.invoices[invoice.id] = invoice
+        user = self.get_user(invoice.user_id)
+        if user is not None:
+            user.invoices_created += 1
+            self.save_user(user)
         return invoice
+
+    def delete_invoice(self, invoice_id: int) -> None:
+        with self._connect() as connection:
+            self._execute(connection, "DELETE FROM invoices WHERE id = ?", (invoice_id,))
+        self.invoices.pop(invoice_id, None)
 
     def save_invoice(self, invoice: Invoice) -> None:
         with self._connect() as connection:

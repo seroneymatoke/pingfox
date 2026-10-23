@@ -146,6 +146,18 @@ def test_free_plan_limit_returns_payment_required(client):
     assert response.get_json()["error"] == "free_tier_limit_reached"
 
 
+def test_free_plan_limit_survives_invoice_deletion(client):
+    signup_and_login(client)
+    payload = {"client_name": "Client", "client_email": "billing@example.com", "amount_cents": 1000, "due_date": "2026-01-08"}
+    created = [client.post("/api/invoices", json=payload, base_url="https://localhost") for _ in range(3)]
+    assert all(response.status_code == 201 for response in created)
+    deleted = client.delete(f"/api/invoices/{created[0].get_json()['id']}", base_url="https://localhost")
+    assert deleted.status_code == 200
+    fourth = client.post("/api/invoices", json=payload, base_url="https://localhost")
+    assert fourth.status_code == 402
+    assert fourth.get_json()["upgrade_url"] == "https://pingfox.com/upgrade"
+
+
 def test_ping_and_mark_paid_are_owner_scoped(client):
     signup_and_login(client)
     created = client.post(

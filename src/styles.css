@@ -63,6 +63,7 @@ input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
 .dashboard-heading { padding: 42px 0 24px; }
 .dashboard-heading h1 { margin: 4px 0 0; font-family: Fraunces, serif; font-size: clamp(32px, 5vw, 52px); }
 .dashboard-subtitle { margin: 8px 0 0; color: #9b9ca6; font-size: 14px; }
+.invoice-limit-note { margin: 8px 0 0; color: #777985; font-size: 11px; }
 .dashboard-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
 .dashboard-summary-item { padding: 15px 17px; background: #15161d; border: 1px solid #2d2e38; border-radius: 12px; }
 .dashboard-summary-item span { display: block; color: #8f9099; font-size: 12px; }

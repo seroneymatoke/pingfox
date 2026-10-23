@@ -8,10 +8,15 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
   const [view, setView] = useState('invoices');
+  const [usage, setUsage] = useState({ plan: user.plan, invoicesCreated: 0, invoiceLimit: user.plan === 'free' ? 3 : null, canAddInvoice: true });
 
   async function loadInvoices() {
     const response = await fetch('/api/dashboard', { credentials: 'include' });
-    if (response.ok) setInvoices((await response.json()).invoices);
+    if (response.ok) {
+      const body = await response.json();
+      setInvoices(body.invoices);
+      setUsage({ plan: body.plan, invoicesCreated: body.invoices_created ?? body.invoices.length, invoiceLimit: body.invoice_limit, canAddInvoice: body.can_add_invoice ?? true });
+    }
   }
 
   useEffect(() => { loadInvoices(); }, []);
@@ -45,11 +50,19 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
     onLogout();
   }
 
+  function addInvoice() {
+    if (!usage.canAddInvoice) {
+      setToast({ message: 'You have used your 3 free invoices. Upgrade to add more.', critical: true });
+      return;
+    }
+    setToast({ message: 'Invoice creation is coming soon.' });
+  }
+
   if (view === 'settings') return <Settings user={user} onBack={() => setView('invoices')} onSaved={onUserUpdated} />;
 
   return <main className="dashboard-shell">
     <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav"><button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>
-    <section className="dashboard-heading"><div><p className="eyebrow">Your workspace</p><h1>Invoices</h1><p className="dashboard-subtitle">Keep every follow-up moving without chasing it yourself.</p></div><button className="primary-button">Add invoice</button></section>
+    <section className="dashboard-heading"><div><p className="eyebrow">Your workspace</p><h1>Invoices</h1><p className="dashboard-subtitle">Keep every follow-up moving without chasing it yourself.</p>{usage.invoiceLimit && <p className="invoice-limit-note">{usage.invoicesCreated} of {usage.invoiceLimit} free invoices used · deleted invoices still count</p>}</div><button className="primary-button" type="button" onClick={addInvoice}>{usage.canAddInvoice ? 'Add invoice' : 'Request upgrade'}</button></section>
     <section className="dashboard-summary" aria-label="Invoice summary">
       <div className="dashboard-summary-item"><span>Active invoices</span><strong>{invoices.length}</strong></div>
       <div className="dashboard-summary-item"><span>Outstanding</span><strong>${(outstanding / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
