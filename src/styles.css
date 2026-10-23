@@ -113,6 +113,9 @@ input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
 .subscription-summary > div, .history-card { padding: 16px; background: #15161d; border: 1px solid #2d2e38; border-radius: 10px; }
 .subscription-summary span { display: block; color: #8f9099; font-size: 11px; }
 .subscription-summary strong { display: block; margin-top: 6px; color: #f3f1ec; font-family: Fraunces, serif; font-size: 20px; text-transform: capitalize; }
+.upgrade-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px; background: #211713; border: 1px solid #6d3627; border-radius: 12px; }
+.upgrade-card h3 { margin: 5px 0 0; font-family: Fraunces, serif; font-size: 20px; }
+.upgrade-card p:not(.eyebrow) { max-width: 470px; margin: 8px 0 0; color: #b7a39d; font-size: 12px; line-height: 1.5; }
 .history-card p { margin-bottom: 0; font-size: 13px; }
 .history-list { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
 .history-list li { display: flex; justify-content: space-between; gap: 12px; color: #c8c8ce; font-size: 12px; text-transform: capitalize; }
@@ -128,5 +131,5 @@ input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
 .toast.critical .dot { background: #ff5c5c; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(-6px); } }
-@media (max-width: 760px) { .dashboard-summary { grid-template-columns: 1fr; }.invoice-card-toolbar { align-items: flex-start; flex-direction: column; }.invoice-filters { width: 100%; justify-content: space-between; }.invoice-filters button { flex: 1; }.invoice-row { grid-template-columns: 1fr auto; }.invoice-amount { grid-column: 2; grid-row: 1; }.status-pill { grid-column: 1; grid-row: 2; width: max-content; }.invoice-actions { grid-column: 2; grid-row: 2; }.settings-layout { grid-template-columns: 1fr; }.settings-tabs { display: flex; overflow-x: auto; position: static; }.settings-tabs button { flex: 0 0 auto; white-space: nowrap; }.settings-panel { max-width: none; }.subscription-summary { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .dashboard-summary { grid-template-columns: 1fr; }.invoice-card-toolbar { align-items: flex-start; flex-direction: column; }.invoice-filters { width: 100%; justify-content: space-between; }.invoice-filters button { flex: 1; }.invoice-row { grid-template-columns: 1fr auto; }.invoice-amount { grid-column: 2; grid-row: 1; }.status-pill { grid-column: 1; grid-row: 2; width: max-content; }.invoice-actions { grid-column: 2; grid-row: 2; }.settings-layout { grid-template-columns: 1fr; }.settings-tabs { display: flex; overflow-x: auto; position: static; }.settings-tabs button { flex: 0 0 auto; white-space: nowrap; }.settings-panel { max-width: none; }.subscription-summary { grid-template-columns: 1fr; }.upgrade-card { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 560px) { .auth-card { padding: 28px 20px; }.form-grid { grid-template-columns: 1fr; gap: 14px; } }

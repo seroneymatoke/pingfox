@@ -208,3 +208,11 @@ def test_paid_subscription_can_be_cancelled_at_period_end(client):
     assert cancelled.status_code == 200
     assert cancelled.get_json()["status"] == "cancel_at_period_end"
     assert client.get("/api/subscription").get_json()["history"][0]["event"] == "cancellation_scheduled"
+
+
+def test_free_user_can_request_starter_upgrade_without_bypassing_billing(client):
+    signup_and_login(client)
+    response = client.post("/api/subscription/upgrade", json={"plan": "starter"})
+    assert response.status_code == 202
+    assert response.get_json()["requested_plan"] == "starter"
+    assert repository.get_user_by_email("owner@example.com").plan == "free"

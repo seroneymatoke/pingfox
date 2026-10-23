@@ -51,14 +51,11 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
   }
 
   function addInvoice() {
-    if (!usage.canAddInvoice) {
-      setToast({ message: 'You have used your 3 free invoices. Upgrade to add more.', critical: true });
-      return;
-    }
+    if (!usage.canAddInvoice) { setView('settings'); return; }
     setToast({ message: 'Invoice creation is coming soon.' });
   }
 
-  if (view === 'settings') return <Settings user={user} onBack={() => setView('invoices')} onSaved={onUserUpdated} />;
+  if (view === 'settings') return <Settings user={user} onBack={() => setView('invoices')} onSaved={onUserUpdated} initialTab={usage.canAddInvoice ? 'business' : 'subscription'} />;
 
   return <main className="dashboard-shell">
     <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav"><button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>

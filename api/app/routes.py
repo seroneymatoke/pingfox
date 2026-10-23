@@ -232,6 +232,28 @@ def subscription():
     return jsonify(plan=user.plan, status=user.subscription_status, cancel_at=user.subscription_cancel_at.isoformat() if user.subscription_cancel_at else None, history=history)
 
 
+@api.get("/plans")
+def plans():
+    return jsonify(plans=[
+        {"id": "free", "name": "Free", "price": 0, "description": "For trying PingFox on a handful of invoices.", "features": ["3 invoices forever", "PDF or manual invoice entry", "Fixed ping schedule"]},
+        {"id": "starter", "name": "Starter", "price": 19, "description": "For freelancers and solo consultants.", "features": ["Up to 25 active invoices", "Custom ping sequence and tone", "Email and SMS pings", "Stripe and QuickBooks sync"]},
+        {"id": "growth", "name": "Growth", "price": 49, "description": "For small agencies with a few hands on billing.", "features": ["Unlimited invoices", "Team seats", "Escalation rules and payment plans"], "coming_soon": True},
+    ])
+
+
+@api.post("/subscription/upgrade")
+@require_user
+def request_upgrade():
+    body = request.get_json(silent=True) or {}
+    if body.get("plan") != "starter":
+        return jsonify(error="Only the Starter plan is available for upgrade requests."), 400
+    user = current_user()
+    if user.plan == "starter":
+        return jsonify(plan=user.plan, status=user.subscription_status, message="You are already on the Starter plan.")
+    repository.add_subscription_event(user.id, "upgrade_requested", "starter")
+    return jsonify(plan=user.plan, requested_plan="starter", status="upgrade_requested", message="Starter checkout will be available when billing is connected."), 202
+
+
 @api.post("/subscription/cancel")
 @require_user
 def cancel_subscription():
