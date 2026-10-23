@@ -64,6 +64,9 @@ input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px #ff6b3d22; }
 .dashboard-heading h1 { margin: 4px 0 0; font-family: Fraunces, serif; font-size: clamp(32px, 5vw, 52px); }
 .dashboard-subtitle { margin: 8px 0 0; color: #9b9ca6; font-size: 14px; }
 .invoice-limit-note { margin: 8px 0 0; color: #777985; font-size: 11px; }
+.upgrade-alert { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; padding: 13px 16px; color: #e8c2b6; background: #211713; border: 1px solid #6d3627; border-radius: 10px; font-size: 12px; line-height: 1.5; }
+.upgrade-alert strong { color: #ff8b6d; }
+.upgrade-alert button { flex: 0 0 auto; padding: 0; color: var(--orange); background: transparent; border: 0; font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .dashboard-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
 .dashboard-summary-item { padding: 15px 17px; background: #15161d; border: 1px solid #2d2e38; border-radius: 12px; }
 .dashboard-summary-item span { display: block; color: #8f9099; font-size: 12px; }
