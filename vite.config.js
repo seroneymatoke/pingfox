@@ -8,7 +8,13 @@ export default defineConfig({
       allow: ['..'],
     },
     proxy: {
-      '/api': 'http://127.0.0.1:5000',
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        headers: {
+          'X-Forwarded-Host': '127.0.0.1:5173',
+          'X-Forwarded-Proto': 'http',
+        },
+      },
     },
   },
 });

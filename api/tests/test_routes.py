@@ -183,6 +183,7 @@ def test_invoice_has_opaque_payment_link_and_safe_stripe_fallback(client):
     public = client.get(f"/api/public/invoices/{payment_token}")
     assert public.status_code == 200
     assert "/invoices/" in public.get_json()["payment_url"]
+    assert public.get_json()["business_email"] == "owner@example.com"
 
 
 def test_invoice_can_be_sent_with_secure_payment_link(client):
@@ -254,3 +255,30 @@ def test_free_user_can_request_starter_upgrade_without_bypassing_billing(client)
     assert response.status_code == 202
     assert response.get_json()["requested_plan"] == "starter"
     assert repository.get_user_by_email("owner@example.com").plan == "free"
+
+
+def test_admin_overview_and_account_controls_are_protected(client):
+    signup_and_login(client)
+    client.application.config["ADMIN_EMAILS"] = "owner@example.com"
+    managed = repository.create_user("managed@example.com", "hash", email_verified=True, full_name="Managed User")
+
+    overview = client.get("/api/admin/overview")
+    assert overview.status_code == 200
+    assert overview.get_json()["metrics"]["total_accounts"] == 2
+    assert overview.get_json()["metrics"]["free_accounts"] == 2
+
+    suspended = client.patch(f"/api/admin/accounts/{managed.id}/status", json={"status": "suspended"})
+    assert suspended.status_code == 200
+    assert suspended.get_json()["account"]["account_status"] == "suspended"
+
+    deleted = client.delete(f"/api/admin/accounts/{managed.id}")
+    assert deleted.status_code == 200
+    assert repository.get_user(managed.id) is None
+
+
+def test_admin_routes_reject_non_admin_users(client):
+    signup_and_login(client)
+    client.application.config["ADMIN_EMAILS"] = "someone-else@example.com"
+
+    response = client.get("/api/admin/overview")
+    assert response.status_code == 403

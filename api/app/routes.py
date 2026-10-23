@@ -12,10 +12,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, current_app, jsonify, make_response, redirect, request
+from flask import Blueprint, current_app, has_request_context, jsonify, make_response, redirect, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from .auth import current_user, require_user
+from .auth import current_user, require_admin, require_user
 from .mailer import send_invoice_email, send_verification_email
 from .models import Invoice, repository
 
@@ -28,6 +28,12 @@ def public_app_url() -> str:
     configured_url = current_app.config.get("APP_URL", "").strip()
     if configured_url:
         return configured_url.rstrip("/")
+    forwarded_host = request.headers.get("X-Forwarded-Host", "").split(",", 1)[0].strip() if has_request_context() else ""
+    if forwarded_host:
+        forwarded_scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(",", 1)[0].strip()
+        return f"{forwarded_scheme}://{forwarded_host}".rstrip("/")
+    if has_request_context() and request.host.split(":", 1)[0] in {"127.0.0.1", "localhost"}:
+        return f"{request.scheme}://{request.host}"
     if current_app.debug or current_app.testing:
         return "http://127.0.0.1:5173"
     if os.environ.get("VERCEL_ENV") == "production":
@@ -37,6 +43,10 @@ def public_app_url() -> str:
         hostname = vercel_url.removeprefix("https://").removeprefix("http://").rstrip("/")
         return f"https://{hostname}"
     return "https://pingfox.com"
+
+
+def business_address(user) -> str:
+    return ", ".join(part for part in (user.residence_address, user.city, user.region, user.postal_code, user.country) if part)
 
 
 def invoice_json(invoice: Invoice) -> dict:
@@ -82,6 +92,8 @@ def user_json(user) -> dict:
         "invoices_created": user.invoices_created,
         "onboarding_complete": bool(user.full_name and user.residence_address and user.country),
         "email_verified": user.email_verified,
+        "account_status": user.account_status,
+        "is_admin": user.email.lower() in {email.strip().lower() for email in current_app.config.get("ADMIN_EMAILS", "").split(",") if email.strip()},
     }
 
 
@@ -263,6 +275,70 @@ def plans():
     ])
 
 
+def admin_account_json(user) -> dict:
+    invoices = repository.invoices_for(user.id)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "business_name": user.business_name,
+        "plan": user.plan,
+        "subscription_status": user.subscription_status,
+        "account_status": user.account_status,
+        "email_verified": user.email_verified,
+        "invoices_created": user.invoices_created,
+        "invoice_count": len(invoices),
+    }
+
+
+@api.get("/admin/overview")
+@require_admin
+def admin_overview():
+    accounts = list(repository.users.values())
+    plan_prices = {"free": 0, "starter": 1900, "growth": 4900}
+    return jsonify(
+        metrics={
+            "total_accounts": len(accounts),
+            "free_accounts": sum(account.plan == "free" for account in accounts),
+            "paying_accounts": sum(account.plan != "free" for account in accounts),
+            "active_accounts": sum(account.account_status == "active" for account in accounts),
+            "suspended_accounts": sum(account.account_status == "suspended" for account in accounts),
+            "closed_accounts": sum(account.account_status == "closed" for account in accounts),
+            "verified_accounts": sum(account.email_verified for account in accounts),
+            "estimated_mrr_cents": sum(plan_prices.get(account.plan, 0) for account in accounts if account.account_status == "active"),
+            "total_invoices": len(repository.invoices),
+        },
+        accounts=[admin_account_json(account) for account in sorted(accounts, key=lambda account: account.id, reverse=True)],
+    )
+
+
+@api.patch("/admin/accounts/<int:user_id>/status")
+@require_admin
+def update_account_status(user_id: int):
+    if user_id == current_user().id:
+        return jsonify(error="You cannot change the status of your own admin account."), 400
+    user = repository.get_user(user_id)
+    if user is None:
+        return jsonify(error="account not found"), 404
+    status = str((request.get_json(silent=True) or {}).get("status", "")).strip().lower()
+    if status not in {"active", "suspended", "closed"}:
+        return jsonify(error="Status must be active, suspended, or closed."), 400
+    user.account_status = status
+    repository.save_user(user)
+    return jsonify(account=admin_account_json(user))
+
+
+@api.delete("/admin/accounts/<int:user_id>")
+@require_admin
+def delete_account(user_id: int):
+    if user_id == current_user().id:
+        return jsonify(error="You cannot delete your own admin account."), 400
+    if repository.get_user(user_id) is None:
+        return jsonify(error="account not found"), 404
+    repository.delete_user(user_id)
+    return jsonify(status="deleted", user_id=user_id)
+
+
 @api.post("/subscription/upgrade")
 @require_user
 def request_upgrade():
@@ -297,6 +373,8 @@ def login():
         return jsonify(error="invalid email or password"), 401
     if not user.email_verified:
         return jsonify(error="email_verification_required", message="Verify your email before logging in."), 403
+    if user.account_status != "active":
+        return jsonify(error="account_unavailable", message="This account is not active. Contact support if you need help."), 403
 
     token = repository.create_session(user.id)
     response = jsonify(**user_json(user))
@@ -400,6 +478,8 @@ def public_invoice(payment_token: str):
         payment_terms=invoice.payment_terms,
         payment_description=user.payment_description,
         business_name=user.business_name.strip() or user.full_name.strip() or "Your billing contact",
+        business_email=user.email,
+        business_address=business_address(user),
         business_logo=user.business_logo,
         payment_url=f"{public_app_url()}/invoices/{invoice.payment_token}",
     )
@@ -416,9 +496,10 @@ def send_invoice(invoice_id: int):
     if not EMAIL_PATTERN.fullmatch(recipient):
         return jsonify(error="Enter a valid recipient email address."), 400
     sender_name = user.business_name.strip() or user.full_name.strip() or "Your billing contact"
-    payment_url = f"{public_app_url()}/api/pay/{invoice.payment_token}"
+    sender_address = business_address(user)
+    payment_url = f"{public_app_url()}/invoices/{invoice.payment_token}"
     try:
-        send_invoice_email(recipient, invoice, payment_url, sender_name)
+        send_invoice_email(recipient, invoice, payment_url, sender_name, sender_address, user.email)
     except RuntimeError as error:
         return jsonify(error="email_delivery_not_configured", message=str(error)), 503
     return jsonify(message="Invoice email sent.", recipient=recipient, payment_url=payment_url)

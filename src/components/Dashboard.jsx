@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FoxMark } from './Brand';
 import { Settings } from './Settings';
+import { AdminPanel } from './AdminPanel';
 import { Toast } from './Toast';
 
 export function Dashboard({ user, onLogout, onUserUpdated }) {
@@ -56,9 +57,10 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
   }
 
   if (view === 'settings') return <Settings user={user} onBack={() => setView('invoices')} onSaved={onUserUpdated} initialTab={usage.canAddInvoice ? 'business' : 'subscription'} />;
+  if (view === 'admin') return <AdminPanel user={user} onBack={() => setView('invoices')} />;
 
   return <main className="dashboard-shell">
-    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav"><button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>
+    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav">{user.is_admin && <button className="quiet-button" type="button" onClick={() => setView('admin')}>Admin</button>}<button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>
     <section className="dashboard-heading"><div><p className="eyebrow">Your workspace</p><h1>Invoices</h1><p className="dashboard-subtitle">Keep every follow-up moving without chasing it yourself.</p>{usage.invoiceLimit && <p className="invoice-limit-note">{usage.invoicesCreated} of {usage.invoiceLimit} free invoices used · deleted invoices still count</p>}</div><button className="primary-button" type="button" onClick={addInvoice}>{usage.canAddInvoice ? 'Add invoice' : 'Request upgrade'}</button></section>
     {!usage.canAddInvoice && <div className="upgrade-alert" role="alert"><span><strong>Free tier reached.</strong> You’ve used all 3 lifetime free invoices. Upgrade to Starter to keep adding invoices.</span><button type="button" onClick={addInvoice}>View Starter</button></div>}
     <section className="dashboard-summary" aria-label="Invoice summary">
