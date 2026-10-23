@@ -170,6 +170,17 @@ def test_invoice_settings_are_persisted_and_snapshotted(client):
     assert repository.invoices[first.get_json()["id"]].invoice_terms == "Payment due on receipt."
 
 
+def test_invoice_has_opaque_payment_link_and_safe_stripe_fallback(client):
+    signup_and_login(client)
+    created = client.post("/api/invoices", json={"client_name": "Client", "client_email": "billing@example.com", "amount_cents": 1000, "due_date": "2026-01-08"})
+    payment_url = created.get_json()["payment_url"]
+    payment_token = payment_url.rsplit("/", 1)[-1]
+    assert payment_token != str(created.get_json()["id"])
+    payment = client.get(f"/api/pay/{payment_token}")
+    assert payment.status_code == 503
+    assert payment.get_json()["error"] == "stripe_not_configured"
+
+
 def test_ping_and_mark_paid_are_owner_scoped(client):
     signup_and_login(client)
     created = client.post(

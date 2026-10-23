@@ -22,7 +22,7 @@ USER_FIELDS = (
 )
 INVOICE_FIELDS = (
     "id", "user_id", "client_name", "client_email", "amount_cents", "due_date", "status",
-    "pings_sent", "last_ping_at", "invoice_number", "invoice_terms", "payment_terms",
+    "pings_sent", "last_ping_at", "invoice_number", "invoice_terms", "payment_terms", "payment_token",
 )
 
 
@@ -90,6 +90,7 @@ class Invoice:
     invoice_number: str = ""
     invoice_terms: str = ""
     payment_terms: str = ""
+    payment_token: str = field(default_factory=lambda: token_urlsafe(32))
 
 
 @dataclass
@@ -152,7 +153,7 @@ class Repository:
                     id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
                     client_email TEXT NOT NULL, amount_cents INTEGER NOT NULL, due_date TEXT NOT NULL,
                     status TEXT NOT NULL, pings_sent INTEGER NOT NULL, last_ping_at TEXT, invoice_number TEXT NOT NULL,
-                    invoice_terms TEXT NOT NULL DEFAULT '', payment_terms TEXT NOT NULL DEFAULT ''
+                    invoice_terms TEXT NOT NULL DEFAULT '', payment_terms TEXT NOT NULL DEFAULT '', payment_token TEXT UNIQUE NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS subscription_events (
@@ -209,7 +210,7 @@ class Repository:
                 invoice_columns = {row["column_name"] for row in self._execute(connection, "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'invoices'")}
             else:
                 invoice_columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(invoices)")}
-            for column, definition in {"invoice_terms": "TEXT NOT NULL DEFAULT ''", "payment_terms": "TEXT NOT NULL DEFAULT ''"}.items():
+            for column, definition in {"invoice_terms": "TEXT NOT NULL DEFAULT ''", "payment_terms": "TEXT NOT NULL DEFAULT ''", "payment_token": "TEXT NOT NULL DEFAULT ''"}.items():
                 if column not in invoice_columns:
                     self._execute(connection, f"ALTER TABLE invoices ADD COLUMN {column} {definition}")
             self._refresh_columns(connection)
@@ -257,7 +258,11 @@ class Repository:
                 values = {name: row[name] for name in INVOICE_FIELDS if name in row_keys}
                 values["due_date"] = _as_datetime(values["due_date"])
                 values["last_ping_at"] = _as_datetime(values["last_ping_at"])
-                self.invoices[row["id"]] = Invoice(**values)
+                invoice = Invoice(**values)
+                if not invoice.payment_token:
+                    invoice.payment_token = token_urlsafe(32)
+                    self._execute(connection, "UPDATE invoices SET payment_token = ? WHERE id = ?", (invoice.payment_token, invoice.id))
+                self.invoices[row["id"]] = invoice
             for row in self._execute(connection, "SELECT token, user_id FROM sessions"):
                 self.sessions[row["token"]] = row["user_id"]
             for row in self._execute(connection, "SELECT id, user_id, event_type, plan, created_at FROM subscription_events"):
@@ -350,7 +355,7 @@ class Repository:
     def create_invoice(self, invoice: Invoice) -> Invoice:
         invoice.id = self._next_id("invoices")
         with self._connect() as connection:
-            self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number,invoice_terms,payment_terms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number, invoice.invoice_terms, invoice.payment_terms))
+            self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number,invoice_terms,payment_terms,payment_token) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number, invoice.invoice_terms, invoice.payment_terms, invoice.payment_token))
         self.invoices[invoice.id] = invoice
         user = self.get_user(invoice.user_id)
         if user is not None:
@@ -362,6 +367,9 @@ class Repository:
         with self._connect() as connection:
             self._execute(connection, "DELETE FROM invoices WHERE id = ?", (invoice_id,))
         self.invoices.pop(invoice_id, None)
+
+    def get_invoice_by_payment_token(self, payment_token: str) -> Invoice | None:
+        return next((invoice for invoice in self.invoices.values() if invoice.payment_token == payment_token), None)
 
     def save_invoice(self, invoice: Invoice) -> None:
         with self._connect() as connection:

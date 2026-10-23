@@ -10,4 +10,5 @@ class Config:
     COOKIE_SECURE = os.environ.get("PINGFOX_COOKIE_SECURE", "false").lower() == "true"
     # Keep this optional so deployments can derive the public URL from Vercel.
     APP_URL = os.environ.get("PINGFOX_APP_URL", "")
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
     VERIFICATION_TOKEN_TTL_HOURS = 24

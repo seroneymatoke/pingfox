@@ -4,10 +4,13 @@ from datetime import datetime
 from functools import wraps
 from datetime import timedelta, timezone
 import hashlib
+import json
 import os
 import re
 from secrets import token_urlsafe
-from urllib.parse import quote
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode
+from urllib.request import Request, urlopen
 
 from flask import Blueprint, current_app, jsonify, make_response, redirect, request
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -50,6 +53,7 @@ def invoice_json(invoice: Invoice) -> dict:
         "invoice_number": invoice.invoice_number,
         "invoice_terms": invoice.invoice_terms,
         "payment_terms": invoice.payment_terms,
+        "payment_url": f"{public_app_url()}/api/pay/{invoice.payment_token}",
     }
 
 
@@ -376,6 +380,38 @@ def create_invoice():
         payment_terms=user.payment_terms,
     ))
     return jsonify(invoice_json(invoice)), 201
+
+
+@api.get("/pay/<payment_token>")
+def pay_invoice(payment_token: str):
+    invoice = repository.get_invoice_by_payment_token(payment_token)
+    if invoice is None:
+        return jsonify(error="payment link not found"), 404
+    if invoice.status == "paid":
+        return jsonify(error="invoice already paid", status="paid"), 409
+    stripe_key = current_app.config.get("STRIPE_SECRET_KEY", "").strip()
+    payment_url = f"{public_app_url()}/api/pay/{invoice.payment_token}"
+    if not stripe_key:
+        return jsonify(error="stripe_not_configured", message="Stripe checkout is not configured yet.", payment_url=payment_url), 503
+    payload = urlencode({
+        "mode": "payment",
+        "line_items[0][price_data][currency]": "usd",
+        "line_items[0][price_data][product_data][name]": f"PingFox invoice {invoice.invoice_number or invoice.id}",
+        "line_items[0][price_data][unit_amount]": invoice.amount_cents,
+        "line_items[0][quantity]": 1,
+        "success_url": f"{public_app_url()}/?payment=success&invoice={invoice.id}",
+        "cancel_url": f"{public_app_url()}/?payment=cancelled&invoice={invoice.id}",
+        "metadata[invoice_id]": invoice.id,
+        "metadata[payment_token]": invoice.payment_token,
+    }).encode()
+    request = Request("https://api.stripe.com/v1/checkout/sessions", data=payload, headers={"Authorization": f"Bearer {stripe_key}", "Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+    try:
+        with urlopen(request, timeout=10) as response:
+            checkout = json.loads(response.read().decode())
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        current_app.logger.warning("Stripe checkout creation failed: %s", error)
+        return jsonify(error="stripe_checkout_unavailable", message="We could not start Stripe checkout. Please try again."), 502
+    return redirect(checkout["url"])
 
 
 @api.delete("/invoices/<int:invoice_id>")
