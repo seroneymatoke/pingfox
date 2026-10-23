@@ -316,3 +316,4 @@ def test_demo_seed_is_idempotent_and_keeps_accounts_free(monkeypatch):
     assert len(repository.invoices) == 18
     assert repository.get_user_by_email("incomplete@demo.pingfox.local").email_verified is False
     assert check_password_hash(existing_demo.password, DEMO_PASSWORD)
+    assert check_password_hash(repository.get_user_by_email("admin@example.com").password, DEMO_PASSWORD)

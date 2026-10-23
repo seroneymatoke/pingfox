@@ -84,7 +84,7 @@ def seed_demo_data() -> None:
     admin_email = os.environ.get("PINGFOX_SUPER_ADMIN_EMAIL") or os.environ.get("PINGFOX_GMAIL_ADDRESS")
     if not admin_email:
         return
-    admin = _upsert_user(admin_email.strip().lower(), "PingFox Operations", "active", True)
+    admin = _upsert_user(admin_email.strip().lower(), "PingFox Operations", "active", True, reset_demo_password=True)
     admin.full_name = "PingFox Super Admin"
     repository.save_user(admin)
     for index, (email, business_name, status, verified) in enumerate(DEMO_ACCOUNTS, start=1):
