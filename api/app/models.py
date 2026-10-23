@@ -18,6 +18,7 @@ USER_FIELDS = (
     "id", "email", "password", "email_verified", "verification_token_hash", "verification_expires_at",
     "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted",
     "privacy_accepted", "plan", "api_key",
+    "subscription_status", "subscription_cancel_at",
 )
 INVOICE_FIELDS = (
     "id", "user_id", "client_name", "client_email", "amount_cents", "due_date", "status",
@@ -65,6 +66,8 @@ class User:
     privacy_accepted: bool = False
     plan: str = "free"
     api_key: str = field(default_factory=lambda: token_urlsafe(32))
+    subscription_status: str = "active"
+    subscription_cancel_at: datetime | None = None
 
 
 @dataclass
@@ -81,6 +84,15 @@ class Invoice:
     invoice_number: str = ""
 
 
+@dataclass
+class SubscriptionEvent:
+    id: int
+    user_id: int
+    event_type: str
+    plan: str
+    created_at: datetime
+
+
 class Repository:
     """SQLite-backed repository; sensitive profile columns are encrypted at rest."""
 
@@ -94,6 +106,7 @@ class Repository:
         self.users: dict[int, User] = {}
         self.invoices: dict[int, Invoice] = {}
         self.sessions: dict[str, int] = {}
+        self.subscription_events: dict[int, SubscriptionEvent] = {}
         self.user_columns: set[str] = set()
         self.invoice_columns: set[str] = set()
         self.session_columns: set[str] = set()
@@ -122,7 +135,8 @@ class Repository:
                     tax_id TEXT NOT NULL, residence_address TEXT NOT NULL, city TEXT NOT NULL,
                     region TEXT NOT NULL, postal_code TEXT NOT NULL, country TEXT NOT NULL,
                     timezone TEXT NOT NULL, terms_accepted {bool_type} NOT NULL, privacy_accepted {bool_type} NOT NULL,
-                    plan TEXT NOT NULL, api_key TEXT UNIQUE NOT NULL
+                    plan TEXT NOT NULL, api_key TEXT UNIQUE NOT NULL, subscription_status TEXT NOT NULL DEFAULT 'active',
+                    subscription_cancel_at {time_type}
                 );
                 CREATE TABLE IF NOT EXISTS invoices (
                     id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
@@ -130,6 +144,10 @@ class Repository:
                     status TEXT NOT NULL, pings_sent INTEGER NOT NULL, last_ping_at TEXT, invoice_number TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS subscription_events (
+                    id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, event_type TEXT NOT NULL,
+                    plan TEXT NOT NULL, created_at {time_type} NOT NULL
+                );
             """.format(
                 id_type="SERIAL" if self.is_postgres else "INTEGER",
                 bool_type="BOOLEAN" if self.is_postgres else "INTEGER",
@@ -165,6 +183,8 @@ class Repository:
                 "terms_accepted": ("BOOLEAN" if self.is_postgres else "INTEGER") + " NOT NULL DEFAULT " + ("FALSE" if self.is_postgres else "0"),
                 "privacy_accepted": ("BOOLEAN" if self.is_postgres else "INTEGER") + " NOT NULL DEFAULT " + ("FALSE" if self.is_postgres else "0"),
                 "plan": "TEXT NOT NULL DEFAULT 'free'",
+                "subscription_status": "TEXT NOT NULL DEFAULT 'active'",
+                "subscription_cancel_at": f"{'TIMESTAMPTZ' if self.is_postgres else 'TEXT'}",
             }.items():
                 if column not in columns:
                     self._execute(connection, f"ALTER TABLE users ADD COLUMN {column} {definition}")
@@ -204,6 +224,7 @@ class Repository:
                     values[name] = self._decrypt(values.get(name, ""))
                 values["email_verified"] = bool(values["email_verified"])
                 values["verification_expires_at"] = _as_datetime(values["verification_expires_at"])
+                values["subscription_cancel_at"] = _as_datetime(values.get("subscription_cancel_at"))
                 values["terms_accepted"] = bool(values["terms_accepted"])
                 values["privacy_accepted"] = bool(values["privacy_accepted"])
                 self.users[row["id"]] = User(**values)
@@ -215,6 +236,8 @@ class Repository:
                 self.invoices[row["id"]] = Invoice(**values)
             for row in self._execute(connection, "SELECT token, user_id FROM sessions"):
                 self.sessions[row["token"]] = row["user_id"]
+            for row in self._execute(connection, "SELECT id, user_id, event_type, plan, created_at FROM subscription_events"):
+                self.subscription_events[row["id"]] = SubscriptionEvent(row["id"], row["user_id"], row["event_type"], row["plan"], _as_datetime(row["created_at"]))
 
     def _next_id(self, table: str) -> int:
         with self._connect() as connection:
@@ -226,7 +249,7 @@ class Repository:
             raise ValueError("email already exists")
         user = User(self._next_id("users"), email, password, **profile)
         password_column = "password" if "password" in self.user_columns else "password_hash"
-        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key"]
+        columns = ["id", "email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "terms_accepted", "privacy_accepted", "plan", "api_key", "subscription_status", "subscription_cancel_at"]
         values = [user.password if column == "password_hash" else getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
@@ -251,16 +274,23 @@ class Repository:
         return self.users.get(user_id)
 
     def save_user(self, user: User) -> None:
-        columns = ["email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone"]
+        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at"]
         values = [getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
                 values[index] = self._encrypt(values[index])
         if user.verification_expires_at:
             values[columns.index("verification_expires_at")] = user.verification_expires_at.isoformat()
+        if user.subscription_cancel_at:
+            values[columns.index("subscription_cancel_at")] = user.subscription_cancel_at.isoformat()
         values.append(user.id)
         with self._connect() as connection:
-            self._execute(connection, f"UPDATE users SET {','.join(f'{column} = ?' for column in columns)} WHERE id = ?", values)
+            try:
+                self._execute(connection, f"UPDATE users SET {','.join(f'{column} = ?' for column in columns)} WHERE id = ?", values)
+            except Exception as error:
+                if "unique" in str(error).lower() or "duplicate" in str(error).lower():
+                    raise ValueError("email already exists") from error
+                raise
 
     def create_session(self, user_id: int) -> str:
         token = token_urlsafe(32)
@@ -268,6 +298,16 @@ class Repository:
             self._execute(connection, "INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
         self.sessions[token] = user_id
         return token
+
+    def add_subscription_event(self, user_id: int, event_type: str, plan: str) -> SubscriptionEvent:
+        event = SubscriptionEvent(self._next_id("subscription_events"), user_id, event_type, plan, datetime.now().astimezone())
+        with self._connect() as connection:
+            self._execute(connection, "INSERT INTO subscription_events (id,user_id,event_type,plan,created_at) VALUES (?,?,?,?,?)", (event.id, event.user_id, event.event_type, event.plan, event.created_at.isoformat()))
+        self.subscription_events[event.id] = event
+        return event
+
+    def subscription_events_for(self, user_id: int) -> list[SubscriptionEvent]:
+        return sorted((event for event in self.subscription_events.values() if event.user_id == user_id), key=lambda event: event.created_at, reverse=True)
 
     def delete_session(self, token: str) -> None:
         with self._connect() as connection:
@@ -298,11 +338,13 @@ class Repository:
                 self._execute(connection, "DELETE FROM sessions")
                 self._execute(connection, "DELETE FROM invoices")
                 self._execute(connection, "DELETE FROM users")
+                self._execute(connection, "DELETE FROM subscription_events")
             else:
-                connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users;")
+                connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users; DELETE FROM subscription_events;")
         self.users.clear()
         self.invoices.clear()
         self.sessions.clear()
+        self.subscription_events.clear()
 
 
 repository = Repository()

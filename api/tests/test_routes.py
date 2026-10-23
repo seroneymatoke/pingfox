@@ -167,3 +167,32 @@ def test_ping_and_mark_paid_are_owner_scoped(client):
 
     ping_again = client.post(f"/api/invoices/{invoice_id}/ping", base_url="https://localhost")
     assert ping_again.status_code == 409
+
+
+def test_settings_update_profile_password_and_unique_email(client):
+    signup_and_login(client)
+    profile = client.put("/api/settings/profile", json={"full_name": "Updated Owner", "business_name": "New Studio", "residence_address": "2 Main Street", "country": "US"})
+    assert profile.status_code == 200
+    assert profile.get_json()["business_name"] == "New Studio"
+
+    password = client.put("/api/settings/password", json={"current_password": "password123", "new_password": "newpassword123"})
+    assert password.status_code == 200
+    assert client.post("/api/login", json={"email": "owner@example.com", "password": "newpassword123"}).status_code == 200
+
+    repository.create_user("taken@example.com", "hash", email_verified=True)
+    duplicate = client.put("/api/settings/email", json={"email": "taken@example.com", "current_password": "newpassword123"})
+    assert duplicate.status_code == 409
+
+
+def test_paid_subscription_can_be_cancelled_at_period_end(client):
+    signup_and_login(client)
+    user = repository.get_user_by_email("owner@example.com")
+    user.plan = "starter"
+    repository.save_user(user)
+
+    subscription = client.get("/api/subscription")
+    assert subscription.get_json()["plan"] == "starter"
+    cancelled = client.post("/api/subscription/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.get_json()["status"] == "cancel_at_period_end"
+    assert client.get("/api/subscription").get_json()["history"][0]["event"] == "cancellation_scheduled"

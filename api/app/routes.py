@@ -66,6 +66,8 @@ def user_json(user) -> dict:
         "country": user.country,
         "timezone": user.timezone,
         "plan": user.plan,
+        "subscription_status": user.subscription_status,
+        "subscription_cancel_at": user.subscription_cancel_at.isoformat() if user.subscription_cancel_at else None,
         "onboarding_complete": bool(user.full_name and user.residence_address and user.country),
         "email_verified": user.email_verified,
     }
@@ -171,6 +173,75 @@ def onboarding():
     user.timezone = str(body.get("timezone", "UTC")).strip() or "UTC"
     repository.save_user(user)
     return jsonify(user_json(user))
+
+
+@api.put("/settings/profile")
+@require_user
+def update_profile():
+    body = request.get_json(silent=True) or {}
+    user = current_user()
+    required_fields = ("full_name", "residence_address", "country")
+    if any(not str(body.get(field, "")).strip() for field in required_fields):
+        return jsonify(error="Please complete your name, address, and country."), 400
+    for field in ("full_name", "phone", "business_name", "tax_id", "residence_address", "city", "region", "postal_code", "country", "timezone"):
+        setattr(user, field, str(body.get(field, getattr(user, field))).strip())
+    repository.save_user(user)
+    return jsonify(user_json(user))
+
+
+@api.put("/settings/password")
+@require_user
+def update_password():
+    body = request.get_json(silent=True) or {}
+    user = current_user()
+    current_password = str(body.get("current_password", ""))
+    new_password = str(body.get("new_password", ""))
+    if not check_password_hash(user.password, current_password):
+        return jsonify(error="Current password is incorrect."), 400
+    if len(new_password) < 8:
+        return jsonify(error="Use at least 8 characters for your new password."), 400
+    user.password = generate_password_hash(new_password)
+    repository.save_user(user)
+    return jsonify(message="Password updated successfully.")
+
+
+@api.put("/settings/email")
+@require_user
+def update_email():
+    body = request.get_json(silent=True) or {}
+    user = current_user()
+    email = str(body.get("email", "")).strip()
+    if not EMAIL_PATTERN.fullmatch(email):
+        return jsonify(error="Enter a valid email address."), 400
+    if not check_password_hash(user.password, str(body.get("current_password", ""))):
+        return jsonify(error="Current password is incorrect."), 400
+    existing = repository.get_user_by_email(email)
+    if existing is not None and existing.id != user.id:
+        return jsonify(error="That email address is already in use."), 409
+    user.email = email
+    repository.save_user(user)
+    return jsonify(user_json(user))
+
+
+@api.get("/subscription")
+@require_user
+def subscription():
+    user = current_user()
+    history = [{"event": event.event_type, "plan": event.plan, "created_at": event.created_at.isoformat()} for event in repository.subscription_events_for(user.id)]
+    return jsonify(plan=user.plan, status=user.subscription_status, cancel_at=user.subscription_cancel_at.isoformat() if user.subscription_cancel_at else None, history=history)
+
+
+@api.post("/subscription/cancel")
+@require_user
+def cancel_subscription():
+    user = current_user()
+    if user.plan == "free":
+        return jsonify(error="The Free plan does not have an active subscription."), 400
+    user.subscription_status = "cancel_at_period_end"
+    user.subscription_cancel_at = datetime.now(timezone.utc)
+    repository.save_user(user)
+    repository.add_subscription_event(user.id, "cancellation_scheduled", user.plan)
+    return jsonify(plan=user.plan, status=user.subscription_status, cancel_at=user.subscription_cancel_at.isoformat())
 
 
 @api.post("/login")
