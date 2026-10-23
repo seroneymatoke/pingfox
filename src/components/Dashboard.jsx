@@ -9,6 +9,7 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
   const [view, setView] = useState('invoices');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [usage, setUsage] = useState({ plan: user.plan, invoicesCreated: 0, invoiceLimit: user.plan === 'free' ? 3 : null, canAddInvoice: true });
 
   async function loadInvoices() {
@@ -60,7 +61,7 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
   if (view === 'admin') return <AdminPanel user={user} onBack={() => setView('invoices')} />;
 
   return <main className="dashboard-shell">
-    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav">{user.is_admin && <button className="quiet-button" type="button" onClick={() => setView('admin')}>Admin</button>}<button className="quiet-button" type="button" onClick={() => setView('settings')}>Settings</button><button className="quiet-button" type="button" onClick={logout}>Log out</button></div></header>
+    <header className="topbar"><div><FoxMark /><span className="brand">PingFox</span></div><div className="dashboard-nav"><div className="dashboard-account-menu"><button className="icon-button" type="button" aria-label="Open account menu" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen(current => !current)}><SettingsIcon /></button>{accountMenuOpen && <div className="dashboard-account-popover" role="menu"><div className="admin-menu-heading">Account</div><button type="button" role="menuitem" onClick={() => { setView('settings'); setAccountMenuOpen(false); }}>Settings</button>{user.is_admin && <button type="button" role="menuitem" onClick={() => { setView('admin'); setAccountMenuOpen(false); }}>Admin</button>}<div className="admin-menu-divider" /><button className="dashboard-logout-item" type="button" role="menuitem" onClick={logout}>Log out</button></div>}</div></div></header>
     <section className="dashboard-heading"><div><p className="eyebrow">Your workspace</p><h1>Invoices</h1><p className="dashboard-subtitle">Keep every follow-up moving without chasing it yourself.</p>{usage.invoiceLimit && <p className="invoice-limit-note">{usage.invoicesCreated} of {usage.invoiceLimit} free invoices used · deleted invoices still count</p>}</div><button className="primary-button" type="button" onClick={addInvoice}>{usage.canAddInvoice ? 'Add invoice' : 'Request upgrade'}</button></section>
     {!usage.canAddInvoice && <div className="upgrade-alert" role="alert"><span><strong>Free tier reached.</strong> You’ve used all 3 lifetime free invoices. Upgrade to Starter to keep adding invoices.</span><button type="button" onClick={addInvoice}>View Starter</button></div>}
     <section className="dashboard-summary" aria-label="Invoice summary">
@@ -79,4 +80,8 @@ export function Dashboard({ user, onLogout, onUserUpdated }) {
     </section>
     {toast && <Toast {...toast} onClose={() => setToast(null)} />}
   </main>;
+}
+
+function SettingsIcon() {
+  return <svg className="admin-gear-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg>;
 }
