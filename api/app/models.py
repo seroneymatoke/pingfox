@@ -1,4 +1,4 @@
-"""Persistent SQLite model layer with encrypted private profile fields."""
+"""Persistent SQLite/Postgres model layer with encrypted private profile fields."""
 
 import base64
 import hashlib
@@ -9,21 +9,29 @@ from datetime import datetime
 from pathlib import Path
 from secrets import token_urlsafe
 
+import psycopg
 from cryptography.fernet import Fernet
+from psycopg.rows import dict_row
 
 PRIVATE_FIELDS = ("phone", "tax_id", "residence_address", "city", "region", "postal_code")
 
 
-def _database_path() -> str:
+def _database_url() -> str:
     url = os.environ.get("DATABASE_URL", "sqlite:///pingfox.db")
-    if not url.startswith("sqlite:///"):
-        raise RuntimeError("The current repository requires a sqlite DATABASE_URL")
-    return url.removeprefix("sqlite:///")
+    if not url.startswith(("sqlite:///", "postgresql://", "postgres://")):
+        raise RuntimeError("DATABASE_URL must use sqlite:/// or postgresql://")
+    return url
 
 
 def _cipher() -> Fernet:
     secret = os.environ.get("PINGFOX_SECRET_KEY", "dev-only-change-me").encode()
     return Fernet(base64.urlsafe_b64encode(hashlib.sha256(secret).digest()))
+
+
+def _as_datetime(value):
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value)
 
 
 @dataclass
@@ -68,8 +76,10 @@ class Repository:
     """SQLite-backed repository; sensitive profile columns are encrypted at rest."""
 
     def __init__(self, path: str | None = None) -> None:
-        self.path = path or _database_path()
-        if self.path != ":memory:":
+        self.url = path or _database_url()
+        self.is_postgres = self.url.startswith(("postgresql://", "postgres://"))
+        self.path = self.url.removeprefix("sqlite:///") if not self.is_postgres else self.url
+        if not self.is_postgres and self.path != ":memory:":
             Path(self.path).expanduser().parent.mkdir(parents=True, exist_ok=True)
         self._fernet = _cipher()
         self.users: dict[int, User] = {}
@@ -79,38 +89,55 @@ class Repository:
         self._load()
 
     def _connect(self):
+        if self.is_postgres:
+            return psycopg.connect(self.url, row_factory=dict_row)
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
         return connection
 
+    def _execute(self, connection, sql: str, params=()):
+        if self.is_postgres:
+            sql = sql.replace("?", "%s")
+        return connection.execute(sql, params)
+
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.executescript("""
+            schema = """
                 CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
-                    email_verified INTEGER NOT NULL DEFAULT 0, verification_token_hash TEXT NOT NULL DEFAULT '', verification_expires_at TEXT,
+                    id {id_type} PRIMARY KEY, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
+                    email_verified {bool_type} NOT NULL DEFAULT {false_value}, verification_token_hash TEXT NOT NULL DEFAULT '', verification_expires_at {time_type},
                     full_name TEXT NOT NULL, phone TEXT NOT NULL, business_name TEXT NOT NULL,
                     tax_id TEXT NOT NULL, residence_address TEXT NOT NULL, city TEXT NOT NULL,
                     region TEXT NOT NULL, postal_code TEXT NOT NULL, country TEXT NOT NULL,
-                    timezone TEXT NOT NULL, terms_accepted INTEGER NOT NULL, privacy_accepted INTEGER NOT NULL,
+                    timezone TEXT NOT NULL, terms_accepted {bool_type} NOT NULL, privacy_accepted {bool_type} NOT NULL,
                     plan TEXT NOT NULL, api_key TEXT UNIQUE NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS invoices (
-                    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
+                    id {id_type} PRIMARY KEY, user_id INTEGER NOT NULL, client_name TEXT NOT NULL,
                     client_email TEXT NOT NULL, amount_cents INTEGER NOT NULL, due_date TEXT NOT NULL,
                     status TEXT NOT NULL, pings_sent INTEGER NOT NULL, last_ping_at TEXT, invoice_number TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL);
-            """)
-            columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
+            """.format(
+                id_type="SERIAL" if self.is_postgres else "INTEGER",
+                bool_type="BOOLEAN" if self.is_postgres else "INTEGER",
+                false_value="FALSE" if self.is_postgres else "0",
+                time_type="TIMESTAMPTZ" if self.is_postgres else "TEXT",
+            )
+            if self.is_postgres:
+                self._execute(connection, schema)
+                columns = {row["column_name"] for row in self._execute(connection, "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")}
+            else:
+                connection.executescript(schema)
+                columns = {row["name"] for row in self._execute(connection, "PRAGMA table_info(users)")}
             migrations = {
-                "email_verified": "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+                "email_verified": f"ALTER TABLE users ADD COLUMN email_verified {'BOOLEAN' if self.is_postgres else 'INTEGER'} NOT NULL DEFAULT {'FALSE' if self.is_postgres else '0'}",
                 "verification_token_hash": "ALTER TABLE users ADD COLUMN verification_token_hash TEXT NOT NULL DEFAULT ''",
-                "verification_expires_at": "ALTER TABLE users ADD COLUMN verification_expires_at TEXT",
+                "verification_expires_at": f"ALTER TABLE users ADD COLUMN verification_expires_at {'TIMESTAMPTZ' if self.is_postgres else 'TEXT'}",
             }
             for column, statement in migrations.items():
                 if column not in columns:
-                    connection.execute(statement)
+                    self._execute(connection, statement)
 
     def _encrypt(self, value: str) -> str:
         return self._fernet.encrypt(value.encode()).decode()
@@ -120,26 +147,26 @@ class Repository:
 
     def _load(self) -> None:
         with self._connect() as connection:
-            for row in connection.execute("SELECT * FROM users"):
+            for row in self._execute(connection, "SELECT * FROM users"):
                 values = dict(row)
                 for name in PRIVATE_FIELDS:
                     values[name] = self._decrypt(values[name])
                 values["email_verified"] = bool(values["email_verified"])
-                values["verification_expires_at"] = datetime.fromisoformat(values["verification_expires_at"]) if values["verification_expires_at"] else None
+                values["verification_expires_at"] = _as_datetime(values["verification_expires_at"])
                 values["terms_accepted"] = bool(values["terms_accepted"])
                 values["privacy_accepted"] = bool(values["privacy_accepted"])
                 self.users[row["id"]] = User(**values)
-            for row in connection.execute("SELECT * FROM invoices"):
+            for row in self._execute(connection, "SELECT * FROM invoices"):
                 values = dict(row)
-                values["due_date"] = datetime.fromisoformat(values["due_date"])
-                values["last_ping_at"] = datetime.fromisoformat(values["last_ping_at"]) if values["last_ping_at"] else None
+                values["due_date"] = _as_datetime(values["due_date"])
+                values["last_ping_at"] = _as_datetime(values["last_ping_at"])
                 self.invoices[row["id"]] = Invoice(**values)
-            for row in connection.execute("SELECT token, user_id FROM sessions"):
+            for row in self._execute(connection, "SELECT token, user_id FROM sessions"):
                 self.sessions[row["token"]] = row["user_id"]
 
     def _next_id(self, table: str) -> int:
         with self._connect() as connection:
-            row = connection.execute(f"SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM {table}").fetchone()
+            row = self._execute(connection, f"SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM {table}").fetchone()
         return int(row["next_id"])
 
     def create_user(self, email: str, password: str, **profile: object) -> User:
@@ -154,7 +181,7 @@ class Repository:
         if user.verification_expires_at:
             values[columns.index("verification_expires_at")] = user.verification_expires_at.isoformat()
         with self._connect() as connection:
-            connection.execute(f"INSERT INTO users ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", values)
+            self._execute(connection, f"INSERT INTO users ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", values)
         self.users[user.id] = user
         return user
 
@@ -180,18 +207,18 @@ class Repository:
             values[columns.index("verification_expires_at")] = user.verification_expires_at.isoformat()
         values.append(user.id)
         with self._connect() as connection:
-            connection.execute(f"UPDATE users SET {','.join(f'{column} = ?' for column in columns)} WHERE id = ?", values)
+            self._execute(connection, f"UPDATE users SET {','.join(f'{column} = ?' for column in columns)} WHERE id = ?", values)
 
     def create_session(self, user_id: int) -> str:
         token = token_urlsafe(32)
         with self._connect() as connection:
-            connection.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
+            self._execute(connection, "INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
         self.sessions[token] = user_id
         return token
 
     def delete_session(self, token: str) -> None:
         with self._connect() as connection:
-            connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            self._execute(connection, "DELETE FROM sessions WHERE token = ?", (token,))
         self.sessions.pop(token, None)
 
     def user_for_session(self, token: str) -> User | None:
@@ -204,17 +231,22 @@ class Repository:
     def create_invoice(self, invoice: Invoice) -> Invoice:
         invoice.id = self._next_id("invoices")
         with self._connect() as connection:
-            connection.execute("INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number))
+            self._execute(connection, "INSERT INTO invoices (id,user_id,client_name,client_email,amount_cents,due_date,status,pings_sent,last_ping_at,invoice_number) VALUES (?,?,?,?,?,?,?,?,?,?)", (invoice.id, invoice.user_id, invoice.client_name, invoice.client_email, invoice.amount_cents, invoice.due_date.isoformat(), invoice.status, invoice.pings_sent, None, invoice.invoice_number))
         self.invoices[invoice.id] = invoice
         return invoice
 
     def save_invoice(self, invoice: Invoice) -> None:
         with self._connect() as connection:
-            connection.execute("UPDATE invoices SET status = ?, pings_sent = ?, last_ping_at = ? WHERE id = ?", (invoice.status, invoice.pings_sent, invoice.last_ping_at.isoformat() if invoice.last_ping_at else None, invoice.id))
+            self._execute(connection, "UPDATE invoices SET status = ?, pings_sent = ?, last_ping_at = ? WHERE id = ?", (invoice.status, invoice.pings_sent, invoice.last_ping_at.isoformat() if invoice.last_ping_at else None, invoice.id))
 
     def reset(self) -> None:
         with self._connect() as connection:
-            connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users;")
+            if self.is_postgres:
+                self._execute(connection, "DELETE FROM sessions")
+                self._execute(connection, "DELETE FROM invoices")
+                self._execute(connection, "DELETE FROM users")
+            else:
+                connection.executescript("DELETE FROM sessions; DELETE FROM invoices; DELETE FROM users;")
         self.users.clear()
         self.invoices.clear()
         self.sessions.clear()
