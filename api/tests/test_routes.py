@@ -1,8 +1,10 @@
-import pytest
 from urllib.parse import parse_qs, urlparse
+
+import pytest
 
 from api.app import create_app
 from api.app.models import repository
+from api.app.seed import seed_demo_data
 
 
 @pytest.fixture(autouse=True)
@@ -298,3 +300,16 @@ def test_admin_email_change_requires_both_email_confirmations(client):
     new_confirmation = client.get(f"/api/email-change/confirm-new?token={new_token}")
     assert new_confirmation.status_code == 302
     assert repository.get_user(1).email == "new-owner@example.com"
+
+
+def test_demo_seed_is_idempotent_and_keeps_accounts_free(monkeypatch):
+    monkeypatch.setenv("PINGFOX_SUPER_ADMIN_EMAIL", "admin@example.com")
+
+    seed_demo_data()
+    seed_demo_data()
+
+    assert len(repository.users) == 10
+    assert sum(user.email_verified for user in repository.users.values()) == 9
+    assert sum(user.plan == "free" for user in repository.users.values()) == 10
+    assert len(repository.invoices) == 18
+    assert repository.get_user_by_email("incomplete@demo.pingfox.local").email_verified is False
