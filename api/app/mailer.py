@@ -1,9 +1,9 @@
 """Verification email delivery with a testable local transport."""
 
-from email.message import EmailMessage
-from html import escape
 import os
 import smtplib
+from email.message import EmailMessage
+from html import escape
 from urllib.parse import urlparse
 
 from flask import current_app
@@ -49,7 +49,7 @@ def send_verification_email(recipient: str, verification_url: str) -> None:
         smtp.send_message(message)
 
 
-def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: str) -> None:
+def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: str, sender_address: str = "", sender_email: str = "") -> None:
     """Send a branded invoice with an opaque payment link and text fallback."""
     if current_app.testing:
         current_app.extensions.setdefault("pingfox_test_emails", []).append({
@@ -68,12 +68,15 @@ def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: s
     invoice_label = invoice.invoice_number or str(invoice.id)
     due_date = invoice.due_date.date().isoformat()
     subject = f"Invoice {invoice_label} from {sender_name}"
+    issuer_details = " · ".join(part for part in (sender_address, sender_email) if part)
+    issuer_line = f"Issued by: {sender_name} ({issuer_details})" if issuer_details else f"Issued by: {sender_name}"
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = sender
     message["To"] = recipient
     message.set_content(
         f"{sender_name} sent you invoice {invoice_label} for {amount}.\n\n"
+        f"{issuer_line}\n\n"
         f"Due date: {due_date}\n\n"
         f"View and pay invoice: {payment_url}\n\n"
         "If the button does not work, copy and paste the link above into your browser. "
@@ -88,6 +91,9 @@ def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: s
     safe_invoice_label = escape(invoice_label)
     safe_due_date = escape(due_date)
     safe_amount = escape(amount)
+    safe_sender_address = escape(sender_address)
+    safe_sender_email = escape(sender_email)
+    issuer_html = "<br>".join(part for part in (safe_sender_address, safe_sender_email) if part)
     parsed_url = urlparse(payment_url)
     logo_url = escape(f"{parsed_url.scheme}://{parsed_url.netloc}/pingfox-favicon.svg", quote=True)
     message.add_alternative(f"""
@@ -98,7 +104,7 @@ def send_invoice_email(recipient: str, invoice, payment_url: str, sender_name: s
             <div style="margin-top:42px;color:#ff6b3d;font-size:12px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Invoice from {safe_sender_name}</div>
             <h1 style="margin:10px 0 0;font-family:Georgia,serif;font-size:36px;line-height:1.1;color:#f3f1ec">Your invoice is ready.</h1>
             <p style="margin:18px 0 0;color:#9b9ca6;font-size:15px;line-height:1.7"><strong style="color:#f3f1ec">{safe_sender_name}</strong> sent invoice <strong style="color:#f3f1ec">{safe_invoice_label}</strong> for <strong style="color:#ff8a65">{safe_amount}</strong>.</p>
-            <div style="margin:26px 0;padding:18px 20px;background:#1d1e27;border:1px solid #30313d;border-radius:12px;color:#9b9ca6;font-size:13px;line-height:1.7">Due date: <strong style="color:#f3f1ec">{safe_due_date}</strong><br>Issued by: <strong style="color:#f3f1ec">{safe_sender_name}</strong></div>
+            <div style="margin:26px 0;padding:18px 20px;background:#1d1e27;border:1px solid #30313d;border-radius:12px;color:#9b9ca6;font-size:13px;line-height:1.7"><strong style="color:#f3f1ec">From {safe_sender_name}</strong>{f'<br>{issuer_html}' if issuer_html else ''}<br><br>Due date: <strong style="color:#f3f1ec">{safe_due_date}</strong></div>
             <p style="margin:28px 0 16px"><a href="{safe_payment_url}" style="display:inline-block;padding:14px 22px;background:#ff6b3d;color:#17100d;border-radius:9px;font-weight:bold;text-decoration:none">View and pay invoice <span style="font-size:18px">→</span></a></p>
             <p style="margin:0 0 20px;color:#777985;font-size:12px;line-height:1.6">Button not working? Copy and paste this secure link into your browser:<br><a href="{safe_payment_url}" style="display:block;margin-top:6px;color:#ff8a65;text-decoration:underline;word-break:break-all">{safe_payment_url}</a></p>
             <p style="margin:0;color:#777985;font-size:12px;line-height:1.6">This email was sent to <strong style="color:#9b9ca6">{safe_recipient}</strong> because {safe_sender_name} issued an invoice to this address. If you were not expecting this invoice, contact the sender before making a payment.</p>

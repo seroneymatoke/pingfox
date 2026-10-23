@@ -21,6 +21,7 @@ export default function App() {
   const [view, setView] = useState(initialView);
 
   useEffect(() => {
+    if (publicInvoiceToken) return undefined;
     fetch('/api/me', { credentials: 'include' })
       .then(response => response.ok ? response.json() : null)
       .then(setUser)
