@@ -305,8 +305,9 @@ class Repository:
         return self.users.get(user_id)
 
     def save_user(self, user: User) -> None:
-        columns = ["email", "password", "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at", "invoices_created"]
-        values = [getattr(user, column) for column in columns]
+        password_column = "password" if "password" in self.user_columns else "password_hash"
+        columns = ["email", password_column, "email_verified", "verification_token_hash", "verification_expires_at", "full_name", *PRIVATE_FIELDS, "business_name", "business_logo", "invoice_terms", "payment_terms", "cancellation_description", "payment_description", "country", "timezone", "plan", "subscription_status", "subscription_cancel_at", "invoices_created"]
+        values = [user.password if column == password_column else getattr(user, column) for column in columns]
         for index, column in enumerate(columns):
             if column in PRIVATE_FIELDS:
                 values[index] = self._encrypt(values[index])

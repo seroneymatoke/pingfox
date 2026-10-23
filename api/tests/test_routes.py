@@ -181,6 +181,17 @@ def test_invoice_has_opaque_payment_link_and_safe_stripe_fallback(client):
     assert payment.get_json()["error"] == "stripe_not_configured"
 
 
+def test_invoice_can_be_sent_with_secure_payment_link(client):
+    signup_and_login(client)
+    created = client.post("/api/invoices", json={"client_name": "Client", "client_email": "billing@example.com", "amount_cents": 12500, "due_date": "2026-01-08"})
+    sent = client.post(f"/api/invoices/{created.get_json()['id']}/send")
+
+    assert sent.status_code == 200
+    email = client.application.extensions["pingfox_test_emails"][-1]
+    assert email["to"] == "billing@example.com"
+    assert email["payment_url"].endswith(created.get_json()["payment_url"].rsplit("/", 1)[-1])
+
+
 def test_ping_and_mark_paid_are_owner_scoped(client):
     signup_and_login(client)
     created = client.post(

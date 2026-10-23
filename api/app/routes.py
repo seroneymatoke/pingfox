@@ -16,7 +16,7 @@ from flask import Blueprint, current_app, jsonify, make_response, redirect, requ
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .auth import current_user, require_user
-from .mailer import send_verification_email
+from .mailer import send_invoice_email, send_verification_email
 from .models import Invoice, repository
 
 api = Blueprint("api", __name__)
@@ -380,6 +380,25 @@ def create_invoice():
         payment_terms=user.payment_terms,
     ))
     return jsonify(invoice_json(invoice)), 201
+
+
+@api.post("/invoices/<int:invoice_id>/send")
+@require_user
+def send_invoice(invoice_id: int):
+    invoice = repository.invoices.get(invoice_id)
+    user = current_user()
+    if invoice is None or invoice.user_id != user.id:
+        return jsonify(error="not found"), 404
+    recipient = str((request.get_json(silent=True) or {}).get("recipient", invoice.client_email)).strip()
+    if not EMAIL_PATTERN.fullmatch(recipient):
+        return jsonify(error="Enter a valid recipient email address."), 400
+    sender_name = user.business_name.strip() or user.full_name.strip() or "Your billing contact"
+    payment_url = f"{public_app_url()}/api/pay/{invoice.payment_token}"
+    try:
+        send_invoice_email(recipient, invoice, payment_url, sender_name)
+    except RuntimeError as error:
+        return jsonify(error="email_delivery_not_configured", message=str(error)), 503
+    return jsonify(message="Invoice email sent.", recipient=recipient, payment_url=payment_url)
 
 
 @api.get("/pay/<payment_token>")
