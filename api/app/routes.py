@@ -53,7 +53,7 @@ def invoice_json(invoice: Invoice) -> dict:
         "invoice_number": invoice.invoice_number,
         "invoice_terms": invoice.invoice_terms,
         "payment_terms": invoice.payment_terms,
-        "payment_url": f"{public_app_url()}/api/pay/{invoice.payment_token}",
+        "payment_url": f"{public_app_url()}/invoices/{invoice.payment_token}",
     }
 
 
@@ -380,6 +380,29 @@ def create_invoice():
         payment_terms=user.payment_terms,
     ))
     return jsonify(invoice_json(invoice)), 201
+
+
+@api.get("/public/invoices/<payment_token>")
+def public_invoice(payment_token: str):
+    invoice = repository.get_invoice_by_payment_token(payment_token)
+    if invoice is None:
+        return jsonify(error="invoice not found"), 404
+    user = repository.get_user(invoice.user_id)
+    if user is None:
+        return jsonify(error="invoice not found"), 404
+    return jsonify(
+        invoice_number=invoice.invoice_number or str(invoice.id),
+        client_name=invoice.client_name,
+        amount_cents=invoice.amount_cents,
+        due_date=invoice.due_date.isoformat(),
+        status=invoice.status,
+        invoice_terms=invoice.invoice_terms,
+        payment_terms=invoice.payment_terms,
+        payment_description=user.payment_description,
+        business_name=user.business_name.strip() or user.full_name.strip() or "Your billing contact",
+        business_logo=user.business_logo,
+        payment_url=f"{public_app_url()}/invoices/{invoice.payment_token}",
+    )
 
 
 @api.post("/invoices/<int:invoice_id>/send")

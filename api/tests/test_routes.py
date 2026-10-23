@@ -180,6 +180,10 @@ def test_invoice_has_opaque_payment_link_and_safe_stripe_fallback(client):
     assert payment.status_code == 503
     assert payment.get_json()["error"] == "stripe_not_configured"
 
+    public = client.get(f"/api/public/invoices/{payment_token}")
+    assert public.status_code == 200
+    assert "/invoices/" in public.get_json()["payment_url"]
+
 
 def test_invoice_can_be_sent_with_secure_payment_link(client):
     signup_and_login(client)

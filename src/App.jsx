@@ -3,6 +3,7 @@ import { Dashboard } from './components/Dashboard';
 import { Landing } from './components/Landing';
 import { Login, Register, VerifyEmail } from './components/AuthScreens';
 import { Onboarding } from './components/Onboarding';
+import { PublicInvoice } from './components/PublicInvoice';
 
 function initialView() {
   if (window.location.hash === '#login') return 'login';
@@ -12,6 +13,7 @@ function initialView() {
 }
 
 export default function App() {
+  const publicInvoiceToken = window.location.pathname.match(/^\/invoices\/([^/]+)\/?$/)?.[1];
   const [user, setUser] = useState(null);
   const [pendingVerification, setPendingVerification] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -28,6 +30,8 @@ export default function App() {
     window.addEventListener('hashchange', syncView);
     return () => window.removeEventListener('hashchange', syncView);
   }, []);
+
+  if (publicInvoiceToken) return <PublicInvoice token={publicInvoiceToken} />;
 
   const goToLanding = () => { window.location.hash = ''; setView('landing'); };
   const goToLogin = () => { window.location.hash = 'login'; setView('login'); };
