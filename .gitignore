@@ -1,18 +1,62 @@
 # Go
 /backend/pingfox
+/server
 /backend/*.exe
 /backend/*.test
 /backend/*.out
+*.coverprofile
 
 # Env / secrets — never commit real keys
 .env
 .env.*
+.envrc
 *.pem
+*.key
+*.crt
 
 # OS
 .DS_Store
 .idea
 .idea/*
-*.pem
 settings.env
 cookies.txt
+
+# Local data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+dist/
+.tools/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vercel
+.vercel/
+
+# Logs / temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# Optional local editor settings
+.vscode/

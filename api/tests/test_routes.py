@@ -1,0 +1,169 @@
+import pytest
+from urllib.parse import parse_qs, urlparse
+
+from api.app import create_app
+from api.app.models import repository
+
+
+@pytest.fixture(autouse=True)
+def reset_repository():
+    repository.reset()
+
+
+@pytest.fixture
+def client():
+    app = create_app()
+    app.config.update(TESTING=True)
+    return app.test_client()
+
+
+def signup_and_login(client):
+    response = client.post(
+        "/api/signup",
+        json={
+            "email": "owner@example.com",
+            "password": "password123",
+            "full_name": "Owner Example",
+            "residence_address": "1 Main Street",
+            "country": "US",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
+        base_url="https://localhost",
+    )
+    assert response.status_code == 202
+    verification_url = client.application.extensions["pingfox_test_emails"][-1]["url"]
+    token = parse_qs(urlparse(verification_url).query)["token"][0]
+    verification = client.get(f"/api/verify-email?token={token}")
+    assert verification.status_code == 302
+    assert verification.headers["Location"].endswith("#onboarding")
+    return client.post("/api/login", json={"email": "owner@example.com", "password": "password123"}, base_url="https://localhost")
+
+
+def test_signup_sends_verification_email_without_creating_a_session(client):
+    response = signup_and_login(client)
+
+    body = response.get_json()
+    assert body["email"] == "owner@example.com"
+    assert "pingfox_session" in response.headers["Set-Cookie"]
+
+
+def test_unverified_login_is_blocked(client):
+    response = client.post("/api/signup", json={"email": "pending@example.com", "password": "password123", "terms_accepted": True, "privacy_accepted": True})
+    assert response.status_code == 202
+    login = client.post("/api/login", json={"email": "pending@example.com", "password": "password123"})
+    assert login.status_code == 403
+    assert login.get_json()["error"] == "email_verification_required"
+
+
+def test_signup_validates_email_and_password(client):
+    response = client.post("/api/signup", json={"email": "not-an-email", "password": "short"})
+
+    assert response.status_code == 400
+    assert "valid email" in response.get_json()["error"]
+
+
+def test_onboarding_stores_profile_without_exposing_tax_id(client):
+    response = client.post(
+        "/api/signup",
+        json={
+            "email": "profile@example.com",
+            "password": "password123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
+    )
+
+    assert response.status_code == 202
+    token = parse_qs(urlparse(client.application.extensions["pingfox_test_emails"][-1]["url"]).query)["token"][0]
+    client.get(f"/api/verify-email?token={token}")
+    client.post("/api/login", json={"email": "profile@example.com", "password": "password123"})
+    response = client.put(
+        "/api/onboarding",
+        json={
+            "full_name": "Profile Owner",
+            "tax_id": "TAX-SECRET",
+            "residence_address": "1 Main Street",
+            "country": "US",
+        },
+    )
+    assert response.status_code == 200
+    assert "tax_id" not in response.get_json()
+    assert repository.get_user_by_email("profile@example.com").tax_id == "TAX-SECRET"
+
+
+def test_session_restores_and_logout_invalidates_it(client):
+    signup_and_login(client)
+
+    assert client.get("/api/me").status_code == 200
+    assert client.post("/api/logout").status_code == 200
+    assert client.get("/api/me").status_code == 401
+
+
+def test_dashboard_is_protected(client):
+    response = client.get("/api/dashboard")
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "unauthorized"}
+
+
+def test_invoice_creation_and_dashboard_filtering(client):
+    signup_and_login(client)
+    response = client.post(
+        "/api/invoices",
+        json={
+            "client_name": "Vantage Retail",
+            "client_email": "billing@vantage.example",
+            "amount_cents": 782000,
+            "due_date": "2026-01-08",
+        },
+        base_url="https://localhost",
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["amount_cents"] == 782000
+
+    dashboard = client.get("/api/dashboard?q=vantage", base_url="https://localhost")
+    assert dashboard.status_code == 200
+    assert len(dashboard.get_json()["invoices"]) == 1
+
+
+def test_free_plan_limit_returns_payment_required(client):
+    signup_and_login(client)
+    payload = {
+        "client_name": "Client",
+        "client_email": "billing@example.com",
+        "amount_cents": 1000,
+        "due_date": "2026-01-08",
+    }
+
+    for _ in range(3):
+        response = client.post("/api/invoices", json=payload, base_url="https://localhost")
+        assert response.status_code == 201
+
+    response = client.post("/api/invoices", json=payload, base_url="https://localhost")
+    assert response.status_code == 402
+    assert response.get_json()["error"] == "free_tier_limit_reached"
+
+
+def test_ping_and_mark_paid_are_owner_scoped(client):
+    signup_and_login(client)
+    created = client.post(
+        "/api/invoices",
+        json={
+            "client_name": "Client",
+            "client_email": "billing@example.com",
+            "amount_cents": 1000,
+            "due_date": "2026-01-08",
+        },
+        base_url="https://localhost",
+    )
+    invoice_id = created.get_json()["id"]
+
+    ping = client.post(f"/api/invoices/{invoice_id}/ping", base_url="https://localhost")
+    assert ping.status_code == 200
+    paid = client.post(f"/api/invoices/{invoice_id}/mark-paid", base_url="https://localhost")
+    assert paid.status_code == 200
+
+    ping_again = client.post(f"/api/invoices/{invoice_id}/ping", base_url="https://localhost")
+    assert ping_again.status_code == 409

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PingFox email preview</title>
+  <link rel="icon" type="image/svg+xml" href="/pingfox-favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --orange:#ff6b3d; --bg:#0a0b0f; --card:#15161d; --line:#2d2e38; --muted:#9b9ca6; --text:#f3f1ec; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#06070a; color:var(--text); font-family:Inter,Arial,sans-serif; }
+    .preview-label { padding:18px; color:#777985; text-align:center; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .email-stage { display:flex; justify-content:center; padding:24px 20px 50px; background:var(--bg); }
+    .email-card { width:min(100%,520px); padding:36px; background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 40px 80px -20px #000b; }
+    .brand { display:flex; align-items:center; gap:9px; font-family:Georgia,serif; font-size:24px; font-weight:bold; }
+    .brand-icon { display:block; border-radius:7px; }
+    .kicker { margin-top:42px; color:var(--orange); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:10px 0 0; font-family:Georgia,'Times New Roman',serif; font-size:36px; line-height:1.1; }
+    .body-copy { margin:18px 0 0; color:var(--muted); font-size:15px; line-height:1.7; }
+    .button { display:inline-block; margin:28px 0 16px; padding:14px 22px; color:#17100d; background:var(--orange); border-radius:9px; font-weight:700; text-decoration:none; box-shadow:0 12px 34px -12px #ff6b3da6; }
+    .fallback { margin:0 0 20px; color:#777985; font-size:12px; line-height:1.6; }
+    .fallback a { display:block; margin-top:6px; color:#ff8a65; overflow-wrap:anywhere; text-decoration:underline; }
+    .fine-print { margin:0; color:#777985; font-size:12px; line-height:1.6; }
+    .footer { padding-top:18px; color:#666873; text-align:center; font-size:11px; }
+  </style>
+</head>
+<body>
+  <div class="preview-label">Email preview · account creation</div>
+  <main class="email-stage">
+    <article class="email-card">
+      <div class="brand"><img class="brand-icon" src="/pingfox-favicon.svg" alt="" width="28" height="28" />PingFox</div>
+      <div class="kicker">Confirm your email</div>
+      <h1>Keep the cash moving.</h1>
+      <p class="body-copy">Confirm your email to finish creating your PingFox account and start setting up your workspace.</p>
+      <a class="button" href="#">Confirm email <span aria-hidden="true">→</span></a>
+      <p class="fallback">Button not working? Copy and paste this link into your browser:
+        <a id="fallback-link" href="#"></a>
+      </p>
+      <p class="fine-print">This link expires in 24 hours. This email was sent to <strong style="color:#9b9ca6">you@example.com</strong> because a PingFox account was created using this email address. If you did not create this account, you can safely ignore this email; no account will be activated until the address is verified.</p>
+    </article>
+  </main>
+  <div class="footer">Gentle nudges, real results.</div>
+</body>
+<script>
+  const previewOrigin = window.location.origin;
+  const previewUrl = `${previewOrigin}/api/verify-email?token=preview-token`;
+  document.querySelector('#fallback-link').href = previewUrl;
+  document.querySelector('#fallback-link').textContent = previewUrl;
+</script>
+</html>

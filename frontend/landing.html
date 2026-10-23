@@ -22,7 +22,7 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
   body {
     background: var(--bg);
@@ -106,6 +106,15 @@
     padding: 6px 14px; border-radius: 100px;
     margin-bottom: 28px;
   }
+  .announcement-close {
+    display: inline-grid; place-items: center;
+    width: 20px; height: 20px; margin: -2px -7px -2px 0;
+    color: rgba(255, 107, 61, 0.75); background: transparent;
+    border: 0; border-radius: 50%; font-size: 17px; line-height: 1;
+    transition: color .2s, background .2s;
+  }
+  .announcement-close:hover,
+  .announcement-close:focus-visible { color: var(--accent); background: rgba(255, 107, 61, 0.14); }
   .eyebrow .dot {
     width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
     animation: pulse-dot 1.8s ease-in-out infinite;
@@ -166,6 +175,16 @@
   }
   .preview-topbar { display: flex; gap: 6px; padding: 4px 8px 16px; }
   .preview-topbar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .preview-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 14px; }
+  .summary-item { padding: 11px 13px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; text-align: left; }
+  .summary-label { color: var(--text-dim); font-size: 11px; }
+  .summary-value { margin-top: 3px; color: var(--text); font-family: var(--display-font); font-size: 19px; font-weight: 600; }
+  .summary-value.accent { color: var(--accent); }
+  .preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .preview-toolbar-label { color: var(--text-dim); font-size: 12px; font-weight: 600; }
+  .preview-filters { display: flex; gap: 4px; }
+  .preview-filter { padding: 5px 9px; color: var(--text-dim); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 11px; cursor: pointer; }
+  .preview-filter:hover, .preview-filter.active { color: var(--text); background: var(--bg); border-color: var(--border); }
 
   .invoice-row {
     display: grid;
@@ -177,7 +196,9 @@
     background: var(--bg);
     margin-bottom: 10px;
     border: 1px solid var(--border);
+    text-align: left;
   }
+  .invoice-row > div:first-child { min-width: 0; text-align: left; }
   .invoice-row:last-child { margin-bottom: 0; }
   .invoice-client { font-weight: 600; font-size: 15px; }
   .invoice-meta { font-size: 13px; color: var(--text-dim); }
@@ -333,7 +354,55 @@
   }
 
   @media (max-width: 640px) {
+    .preview-summary { gap: 6px; }
+    .summary-item { padding: 9px 8px; }
+    .summary-value { font-size: 16px; }
+    .preview-toolbar { align-items: flex-start; flex-direction: column; gap: 7px; }
+    .preview-filters { width: 100%; justify-content: space-between; }
+    .preview-filter { flex: 1; padding-left: 4px; padding-right: 4px; }
     .invoice-row { grid-template-columns: 1fr; gap: 8px; text-align: left; }
+  }
+
+  /* Keep the product demo above the fold on ordinary desktop laptops. The
+     original spacious rhythm remains the default for taller displays and
+     mobile; this only compresses the hero when vertical space is limited. */
+  @media (min-width: 1000px) and (max-height: 900px) {
+    header.hero { padding: 28px 0 28px; }
+    .eyebrow { margin-bottom: 12px; padding: 5px 12px; }
+    h1 { font-size: clamp(40px, 4.5vw, 56px); line-height: 1; margin-bottom: 14px; }
+    .hero-sub { font-size: 15px; margin-bottom: 18px; }
+    .hero-actions { gap: 12px; margin-bottom: 8px; }
+    .cta-primary, .cta-secondary { padding-top: 12px; padding-bottom: 12px; font-size: 15px; }
+    .preview { margin-top: 20px; padding: 10px; }
+    .preview-topbar { padding: 1px 8px 7px; }
+    .invoice-row { gap: 10px; padding: 9px 12px; margin-bottom: 6px; }
+    .invoice-client { font-size: 13px; }
+    .invoice-meta, .invoice-lastping { font-size: 11px; }
+    .invoice-amount { font-size: 16px; }
+    .status-pill { padding: 4px 9px; font-size: 11px; }
+    .ping-btn, .reclaim-btn { padding: 6px 10px; font-size: 12px; }
+  }
+
+  @media (min-width: 1000px) and (max-height: 780px) {
+    header.hero { padding: 18px 0 20px; }
+    h1 { font-size: clamp(38px, 4.2vw, 50px); }
+    .hero-sub { margin-bottom: 14px; }
+    .preview { margin-top: 14px; }
+    .invoice-row { padding-top: 7px; padding-bottom: 7px; }
+  }
+
+  /* Fluid desktop rhythm: the hero breathes more on taller monitors without
+     jumping between fixed breakpoint layouts. */
+  @media (min-width: 1000px) {
+    header.hero { padding-top: clamp(18px, 3.5vh, 96px); padding-bottom: clamp(20px, 3.2vh, 80px); }
+    .eyebrow { margin-bottom: clamp(12px, 2vh, 28px); }
+    h1 { font-size: clamp(40px, 6vh, 76px); margin-bottom: clamp(14px, 2.5vh, 28px); }
+    .hero-sub { font-size: clamp(15px, 1.8vh, 19px); margin-bottom: clamp(18px, 3.5vh, 44px); }
+    .hero-actions { gap: clamp(12px, 1.5vw, 16px); margin-bottom: clamp(8px, 1.8vh, 20px); }
+    .cta-primary, .cta-secondary { padding-top: clamp(12px, 1.4vh, 15px); padding-bottom: clamp(12px, 1.4vh, 15px); }
+    .preview { margin-top: clamp(14px, 4vh, 80px); padding: clamp(10px, 1.8vh, 20px); }
+    .preview-topbar { padding-bottom: clamp(7px, 1.5vh, 16px); }
+    .invoice-row { gap: clamp(10px, 1.4vw, 20px); padding-top: clamp(7px, 1.7vh, 16px); padding-bottom: clamp(7px, 1.7vh, 16px); margin-bottom: clamp(6px, 1vh, 10px); }
   }
 
   /* ---------- SECTION SHARED ---------- */
@@ -424,7 +493,8 @@
     font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
     padding: 4px 10px; border-radius: 100px;
   }
-  .price-tier { font-size: 14px; color: var(--text-dim); font-weight: 600; margin-bottom: 12px; }
+  .price-tier { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--text-dim); font-weight: 600; margin-bottom: 12px; }
+  .coming-soon-badge { padding: 4px 8px; color: var(--accent); background: rgba(255, 107, 61, 0.1); border: 1px solid rgba(255, 107, 61, 0.3); border-radius: 100px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
   .price-value { font-family: var(--display-font); font-weight: 600; font-size: 40px; margin-bottom: 4px; }
   .price-value span { font-size: 15px; color: var(--text-dim); font-weight: 400; font-family: var(--body-font); }
   .price-desc { color: var(--text-dim); font-size: 14px; margin-bottom: 26px; }
@@ -439,6 +509,7 @@
   }
   .price-card.featured .price-cta { background: var(--accent); color: #14161C; border-color: var(--accent); }
   .price-cta:hover { border-color: var(--accent); }
+  .price-cta-disabled { color: var(--text-dim); background: transparent; cursor: not-allowed; opacity: 0.8; }
 
   @media (max-width: 900px) { .pricing-grid { grid-template-columns: 1fr; } }
 
@@ -493,7 +564,11 @@
     <div class="ripple"></div>
   </div>
   <div class="wrap hero-inner">
-    <div class="eyebrow"><span class="dot"></span> Now syncing with Stripe Invoicing</div>
+    <div class="eyebrow" id="stripeAnnouncement" role="status" aria-live="polite">
+      <span class="dot"></span>
+      <span>Stripe invoicing sync is coming soon</span>
+      <button class="announcement-close" type="button" data-dismiss-announcement aria-label="Dismiss Stripe announcement">×</button>
+    </div>
     <h1>Stop chasing invoices.<br>Let <em>PingFox</em> do the nudging.</h1>
     <p class="hero-sub">Upload an invoice PDF or add one in seconds — PingFox reads it, sends it, and follows up automatically until it's paid.</p>
     <div class="hero-actions">
@@ -504,6 +579,22 @@
 
     <div class="preview">
       <div class="preview-topbar"><span></span><span></span><span></span></div>
+
+      <div class="preview-summary" aria-label="Invoice summary">
+        <div class="summary-item"><div class="summary-label">Active invoices</div><div class="summary-value">4</div></div>
+        <div class="summary-item"><div class="summary-label">Outstanding</div><div class="summary-value">$11,200</div></div>
+        <div class="summary-item"><div class="summary-label">Needs attention</div><div class="summary-value accent">2 overdue</div></div>
+      </div>
+
+      <div class="preview-toolbar">
+        <span class="preview-toolbar-label">Recent invoices</span>
+        <div class="preview-filters" role="group" aria-label="Filter invoices">
+          <button class="preview-filter active" type="button" data-demo-filter="all">All</button>
+          <button class="preview-filter" type="button" data-demo-filter="overdue">Overdue</button>
+          <button class="preview-filter" type="button" data-demo-filter="pending">Pending</button>
+          <button class="preview-filter" type="button" data-demo-filter="paid">Paid</button>
+        </div>
+      </div>
 
       <div class="invoice-row" data-invoice="1042">
         <div>
@@ -767,7 +858,7 @@
         <a href="#" class="price-cta">Start pinging</a>
       </div>
       <div class="price-card">
-        <div class="price-tier">Growth</div>
+        <div class="price-tier">Growth <span class="coming-soon-badge">Coming soon</span></div>
         <div class="price-value">$49<span>/month</span></div>
         <div class="price-desc">For small agencies with a few hands on billing.</div>
         <ul class="price-feats">
@@ -776,7 +867,7 @@
           <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Escalation rules &amp; payment plans</li>
           <li><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" stroke-width="1.8"/></svg> Recovery analytics</li>
         </ul>
-        <a href="#" class="price-cta">Talk to us</a>
+        <span class="price-cta price-cta-disabled" aria-disabled="true">Coming soon</span>
       </div>
     </div>
   </div>
@@ -808,6 +899,27 @@
 <script>
   const toastStack = document.getElementById('toastStack');
 
+  document.querySelectorAll('button, a').forEach((element) => {
+    const label = element.textContent.toLowerCase();
+    if (label.includes('start pinging') || label.includes('start free')) {
+      element.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.location.hash = 'login';
+      });
+    }
+  });
+
+  const stripeAnnouncement = document.getElementById('stripeAnnouncement');
+  const announcementKey = 'pingfox-announcement-stripe-sync-v1';
+  try {
+    if (new URLSearchParams(window.location.search).has('previewAnnouncement')) localStorage.removeItem(announcementKey);
+    if (localStorage.getItem(announcementKey) === 'dismissed') stripeAnnouncement?.remove();
+  } catch (_) {}
+  stripeAnnouncement?.querySelector('[data-dismiss-announcement]')?.addEventListener('click', () => {
+    try { localStorage.setItem(announcementKey, 'dismissed'); } catch (_) {}
+    stripeAnnouncement.remove();
+  });
+
   function showToast(message, critical = false) {
     const t = document.createElement('div');
     t.className = 'toast' + (critical ? ' critical' : '');
@@ -834,6 +946,21 @@
         btn.disabled = false;
         btn.textContent = original;
       }, 2200);
+    });
+  });
+
+  document.querySelectorAll('[data-demo-filter]').forEach(filter => {
+    filter.addEventListener('click', () => {
+      const selected = filter.dataset.demoFilter;
+      document.querySelectorAll('[data-demo-filter]').forEach(item => item.classList.toggle('active', item === filter));
+      document.querySelectorAll('.invoice-row').forEach(row => {
+        const status = row.querySelector('.status-pill');
+        const isPaid = status?.classList.contains('status-paid');
+        const isPending = status?.classList.contains('status-pending');
+        const isOverdue = status?.classList.contains('status-overdue') || status?.classList.contains('status-critical');
+        const visible = selected === 'all' || (selected === 'paid' && isPaid) || (selected === 'pending' && isPending) || (selected === 'overdue' && isOverdue);
+        row.style.display = visible ? '' : 'none';
+      });
     });
   });
 

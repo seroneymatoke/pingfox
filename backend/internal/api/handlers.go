@@ -494,6 +494,7 @@ func (s *Server) handleCreateInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 	invoiceNumber := strings.TrimSpace(req.InvoiceNumber)
 	if invoiceNumber == "" {
+		count := 0
 		invoiceNumber = fmt.Sprintf(
 			"PF-%d-%04d",
 			time.Now().Year(),
